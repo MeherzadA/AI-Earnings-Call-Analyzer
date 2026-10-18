@@ -25,7 +25,8 @@ connect_args = {"connect_timeout": 10} if DATABASE_URL and DATABASE_URL.startswi
 if connect_args:
     query = make_url(DATABASE_URL).query
     if query.get("sslmode") == "verify-full" and not query.get("sslrootcert"):
-        connect_args["sslrootcert"] = certifi.where()
+        certificate = os.getenv("DATABASE_SSL_ROOT_CERT")
+        connect_args["sslrootcert"] = str(Path(__file__).resolve().parent / certificate) if certificate else certifi.where()
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,

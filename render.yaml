@@ -13,3 +13,5 @@ services:
         sync: false
       - key: PYTHON_VERSION
         value: 3.11.17
+      - key: DATABASE_SSL_ROOT_CERT
+        value: supabase-ca.crt

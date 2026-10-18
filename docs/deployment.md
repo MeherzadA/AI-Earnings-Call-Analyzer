@@ -15,7 +15,7 @@ The public frontend is hosted on Vercel and the API on Render. The repair has be
 
 Use the existing SQLAlchemy/psycopg2 backend with Supabase's **Session pooler** connection on port 5432. Obtain the actual hostname and username from the project's Connect dialog. The session pooler supports IPv4 on the Free plan without an IPv4 add-on.
 
-Set `sslmode=verify-full` in the backend connection URL. If no explicit `sslrootcert` is configured, the backend supplies the bundled Certifi CA certificates for server verification. Keep the URL in Render's environment settings. Enable row-level security on app tables and leave them inaccessible to Supabase's anonymous/authenticated Data API roles; the backend owns database access.
+Set `sslmode=verify-full` in the backend connection URL and `DATABASE_SSL_ROOT_CERT=supabase-ca.crt` in Render. The public CA certificate was downloaded from Supabase's authenticated Database Settings page ([official certificate](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt)). A custom certificate path is resolved relative to `backend`; without one, the backend uses Certifi's standard trust bundle. Keep the connection URL in Render's environment settings. Enable row-level security on app tables and leave them inaccessible to Supabase's anonymous/authenticated Data API roles; the backend owns database access.
 
 Supabase Free may pause projects with low database activity over seven days. It is not an always-on availability guarantee. Source: [connection guidance](https://supabase.com/docs/guides/database/connecting-to-postgres), [pausing policy](https://supabase.com/docs/guides/platform/free-project-pausing).
 
