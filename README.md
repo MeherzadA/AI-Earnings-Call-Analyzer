@@ -4,28 +4,12 @@ A full-stack investment research tool that turns earnings call transcripts into
 structured AI-powered reports w/ sentiment, key claims, red flags, opportunities, 
 and post-earnings stock price reaction.
 
-**Live:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app)
+**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). Backend database restoration is pending; see [deployment notes](docs/deployment.md).
 
 
-<div align="center">
-  <img width="1859" alt="Homepage" src="https://github.com/user-attachments/assets/38ddd088-d72e-4bbf-a918-727544536aac"/>
-</div>
+![Local UI preview](docs/images/homepage.jpg)
 
-<br/>
-
-<div align="center">
-  <img width="420" height="816" alt="image" src="https://github.com/user-attachments/assets/2fe1f565-307a-44dd-aa11-fc5a8fe8950f" />
-  <img width="400" alt="Key Claims" src="https://github.com/user-attachments/assets/56ba0e40-4614-49b8-a502-b3a6d76c90b3" />
-</div>
-
-<div align="center">
-  <img width="406" alt="Opportunities" src="https://github.com/user-attachments/assets/43ce812d-f2f3-486c-af75-59ebc60ae5c9" />
-</div>
-
-
-
-
-
+*Local preview with a real saved analysis; public backend restoration is pending.*
 
 ## What it does
 
@@ -40,8 +24,8 @@ The homepage shows every previously analyzed companies, and can be sorted in a v
 
 - **Backend:** FastAPI, PostgreSQL, SQLAlchemy: deployed on Render
 - **Frontend:** React, Recharts, Vite: deployed on Vercel
-- **AI:** Google Gemini API (free Flash 2.5) for transcript analysis
-- **Data:** defeatbeta-api for transcripts, yfinance for post-earnings price data
+- **AI:** Google Gemini API for transcript analysis
+- **Data:** DuckDB reads the requested call from defeatbeta's public Parquet dataset using HTTP range requests; yfinance supplies post-earnings prices.
 
 ## Running locally
 ```bash
@@ -61,14 +45,32 @@ uvicorn main:app --reload
 # Frontend
 cd frontend
 npm install
+# Create frontend/.env with VITE_API_BASE_URL=http://127.0.0.1:8000
 npm run dev
 ```
 
 ## Features
-- AI analysis of any NYSE-listed company on with a publicly available transcript
+- AI analysis of US-listed companies with an available transcript for the selected fiscal period
 - Sentiment scoring with visual bar
 - Post-earnings stock price chart (earnings date + 5 trading days)
 - Cached analyses with sort by recency, largest movement, top gainers, biggest drops
 - Database caching where analyzed transcripts are stored and served instantly on 
   repeat requests
-- Ticker autocomplete powered by Financial Modeling Prep :)
+- Optional ticker autocomplete using `VITE_FMP_API_KEY` (Financial Modeling Prep). Direct ticker entry works without it.
+
+## Configuration and checks
+
+Use Python 3.11.17. Set `DATABASE_URL` and `GEMINI_API_KEY` in `backend/.env` locally or in the hosting service's environment. An existing, reachable PostgreSQL database is required for deployment; `render.yaml` does not provision or purchase one. For an isolated local demo, `DATABASE_URL=sqlite:///./local-demo.db` also works.
+
+`GEMINI_MODEL` optionally overrides the existing `gemini-2.5-flash` model. AI availability depends on the configured key's model access and quota. Set `VITE_API_BASE_URL` at frontend build time; without it the app uses the existing Render backend. Values prefixed with `VITE_` are public in the browser; keep backend credentials out of them.
+
+From the repository root:
+
+```bash
+python -m unittest discover -s backend
+node --test frontend/test/api.test.js
+cd frontend
+npm run build
+```
+
+The automated checks use temporary local storage and mock external providers. They never contact the production database or consume AI quota.

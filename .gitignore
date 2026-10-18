@@ -19,3 +19,6 @@ Thumbs.db
 
 .duckdb_extensions/
 backend/.cache/
+
+.runtime/
+frontend/dist/

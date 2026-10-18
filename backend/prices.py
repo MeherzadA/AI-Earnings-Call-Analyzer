@@ -1,10 +1,6 @@
 import yfinance as yf
 from datetime import datetime, timedelta
-import duckdb
-from pathlib import Path
-
-
-TRANSCRIPTS_CACHE_PATH = Path(__file__).resolve().parent / ".cache" / "stock_earning_call_transcripts.parquet"
+from transcript import fetch_transcript
 
 
 def get_earnings_date(ticker: str, year: int, quarter: int) -> str | None:
@@ -13,39 +9,8 @@ def get_earnings_date(ticker: str, year: int, quarter: int) -> str | None:
     
     Returns: Date string in format "YYYY-MM-DD" or None if not found
     """
-    try:
-        if not TRANSCRIPTS_CACHE_PATH.exists():
-            return None
-        
-        connection = duckdb.connect(":memory:")
-        try:
-            row = connection.execute(
-                """
-                SELECT report_date
-                FROM read_parquet(?)
-                WHERE symbol = ? AND fiscal_year = ? AND fiscal_quarter = ?
-                LIMIT 1
-                """,
-                [str(TRANSCRIPTS_CACHE_PATH), ticker.upper(), year, quarter],
-            ).fetchone()
-
-            print(f"DEBUG: earnings date row = {row}")
-        
-        except Exception as e:
-            print(f"DEBUG: get_earnings_date error = {e}")
-            raise RuntimeError(f"Failed to get earnings date for {ticker.upper()} Q{quarter} {year}: {e}") from e
-
-
-
-        finally:
-            connection.close()
-        
-        if row and row[0]:
-            # Return date as string (should already be in YYYY-MM-DD format)
-            return str(row[0])
-        return None
-    except Exception as e:
-        raise RuntimeError(f"Failed to get earnings date for {ticker.upper()} Q{quarter} {year}: {e}") from e
+    transcript = fetch_transcript(ticker, year, quarter)
+    return transcript.get("report_date") if transcript else None
 
 
 def get_next_trading_day(date_str: str) -> str:
@@ -107,7 +72,10 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
         start_date = (earnings_date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
         end_date = (earnings_date_obj + timedelta(days=15)).strftime("%Y-%m-%d")
         
-        data = yf.download(ticker.upper(), start=start_date, end=end_date, progress=False)
+        data = yf.download(
+            ticker.upper(), start=start_date, end=end_date, progress=False,
+            auto_adjust=False, threads=False, timeout=10,
+        )
         
         if data.empty:
             raise RuntimeError(f"No price data available for {ticker.upper()} around {earnings_date}")
@@ -117,34 +85,32 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
 
         # Flatten MultiIndex columns — yfinance returns ('Close', 'NVDA') style columns
         # We just want a simple 'Close' column with scalar values
-        close_prices = data["Close"].squeeze()
+        close_prices = data["Close"]
+        if close_prices.ndim == 2:
+            close_prices = close_prices.iloc[:, 0]
+        close_prices = close_prices.dropna()
 
-        print(f"DEBUG: data shape = {data.shape}")
-        print(f"DEBUG: data columns = {data.columns.tolist()}")
-        print(f"DEBUG: earnings date row = {data.loc[earnings_date] if earnings_date in data.index.strftime('%Y-%m-%d').values else 'not found'}")
-        
         # Get the close price on earnings date
         earnings_date_close = None
         if earnings_date in close_prices.index.strftime("%Y-%m-%d").values:
             earnings_date_close = float(close_prices.loc[earnings_date])
-            print(f"DEBUG earnings_date_close type: {type(earnings_date_close)}, value: {earnings_date_close}")
         else:
             # If exact date not found, find the most recent date before or on earnings_date
             valid_dates = close_prices.index[close_prices.index <= earnings_date_obj]
             if not valid_dates.empty:
                 earnings_date_close = float(close_prices.loc[valid_dates[-1]])
         
-        if earnings_date_close is None:
+        if earnings_date_close is None or earnings_date_close <= 0:
             raise RuntimeError(f"Could not find price data for {ticker.upper()} on or before {earnings_date}")
         
         # Get trading days after earnings
         trading_days = []
-        for date_index in data.index:
+        for date_index in close_prices.index:
             if date_index > earnings_date_obj:
                 trading_days.append(date_index)
         
-        if len(trading_days) < 5:
-            raise RuntimeError(f"Not enough trading days after {earnings_date} for {ticker.upper()}")
+        if not trading_days:
+            raise RuntimeError("No trading days available after the call yet.")
         
         # 1-day return (next trading day)
         one_day_date = trading_days[0]
@@ -152,10 +118,11 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
         return_1day = float(((one_day_close - earnings_date_close) / earnings_date_close) * 100)
         
         # 5-day return (5 trading days later)
-        five_day_date = trading_days[4]
-        five_day_close = float(close_prices.loc[five_day_date])
-
-        return_5day = float(((five_day_close - earnings_date_close) / earnings_date_close) * 100)
+        five_day_date = trading_days[4] if len(trading_days) >= 5 else None
+        return_5day = (
+            float(((float(close_prices.loc[five_day_date]) - earnings_date_close) / earnings_date_close) * 100)
+            if five_day_date is not None else None
+        )
         
         # Collect daily prices for charting (earnings date + 5 trading days after)
         daily_prices = [
@@ -176,17 +143,17 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
         
         return {
             "return_1day": round(return_1day, 2),
-            "return_5day": round(return_5day, 2),
+            "return_5day": round(return_5day, 2) if return_5day is not None else None,
             "earnings_date": earnings_date,
             "return_1day_date": one_day_date.strftime("%Y-%m-%d"),
-            "return_5day_date": five_day_date.strftime("%Y-%m-%d"),
+            "return_5day_date": five_day_date.strftime("%Y-%m-%d") if five_day_date is not None else None,
             "daily_prices": daily_prices
         }
     
     except Exception as e:
         # Return None values if we can't calculate returns (missing data, delisted stock, etc.)
         # This allows the analysis to proceed without blocking on price data
-        print(f"Warning: Could not calculate returns for {ticker.upper()} on {earnings_date}: {e}")
+        print(f"Price data unavailable for {ticker.upper()} ({type(e).__name__})")
         return {
             "return_1day": None,
             "return_5day": None,
@@ -194,15 +161,11 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
             "return_1day_date": None,
             "return_5day_date": None,
             "daily_prices": [],
-            "error": str(e)
+            "error": "Price data is unavailable for this call."
         }
 
 
-def get_stock_returns(ticker: str, year: int, quarter: int) -> dict:
-
-    print(f"DEBUG: Looking for earnings date for {ticker} Q{quarter} {year}")
-    print(f"DEBUG: Cache path = {TRANSCRIPTS_CACHE_PATH}")
-    print(f"DEBUG: Cache exists = {TRANSCRIPTS_CACHE_PATH.exists()}")
+def get_stock_returns(ticker: str, year: int, quarter: int, earnings_date: str | None = None) -> dict:
 
     """
     Main function: fetch earnings date and calculate returns.
@@ -215,7 +178,7 @@ def get_stock_returns(ticker: str, year: int, quarter: int) -> dict:
     }
     """
     try:
-        earnings_date = get_earnings_date(ticker, year, quarter)
+        earnings_date = earnings_date or get_earnings_date(ticker, year, quarter)
         
         if not earnings_date:
             return {
@@ -231,5 +194,5 @@ def get_stock_returns(ticker: str, year: int, quarter: int) -> dict:
         return {
             "return_1day": None,
             "return_5day": None,
-            "error": str(e)
+            "error": "Price data is unavailable for this call."
         }
