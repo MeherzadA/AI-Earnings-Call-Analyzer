@@ -4,12 +4,12 @@ A full-stack investment research tool that turns earnings call transcripts into
 structured AI-powered reports w/ sentiment, key claims, red flags, opportunities, 
 and post-earnings stock price reaction.
 
-**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). Backend database restoration is pending; see [deployment notes](docs/deployment.md).
+**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). Verified end to end on October 18, 2026 with a fresh analysis, prices, saved history, and cached reopening. See [deployment notes](docs/deployment.md).
 
 
 ![Local UI preview](docs/images/homepage.jpg)
 
-*Local preview with a real saved analysis; public backend restoration is pending.*
+*Interface preview with a real saved analysis.*
 
 ## What it does
 
@@ -22,7 +22,7 @@ The homepage shows every previously analyzed companies, and can be sorted in a v
 
 ## Stack
 
-- **Backend:** FastAPI, PostgreSQL, SQLAlchemy: deployed on Render
+- **Backend:** FastAPI and SQLAlchemy on Render; PostgreSQL on Supabase Free
 - **Frontend:** React, Recharts, Vite: deployed on Vercel
 - **AI:** Google Gemini API for transcript analysis
 - **Data:** DuckDB reads the requested call from defeatbeta's public Parquet dataset using HTTP range requests; yfinance supplies post-earnings prices.
