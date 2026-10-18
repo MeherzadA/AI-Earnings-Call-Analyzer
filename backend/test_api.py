@@ -1,6 +1,7 @@
 """Run with python -m unittest discover -s backend. No provider calls or production DB."""
 
 import os
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -57,6 +58,24 @@ class AnalysisFlowTests(unittest.TestCase):
                     response = self.client.post("/analyze", json={"ticker": ticker, "year": 2024, "quarter": quarter})
                     self.assertEqual(response.status_code, 422)
             transcript.assert_not_called()
+
+    def test_an_older_unanalyzed_transcript_does_not_hide_a_saved_report(self):
+        with database.SessionLocal() as db:
+            orphan = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text="Earlier transcript")
+            saved = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text="Analyzed transcript")
+            db.add_all([orphan, saved])
+            db.flush()
+            db.add(main.models.Analysis(
+                transcript_id=saved.id, sentiment=REPORT["sentiment"],
+                sentiment_score=REPORT["sentiment_score"], summary=REPORT["summary"],
+                key_claims=json.dumps(REPORT["key_claims"]), red_flags="[]", opportunities="[]",
+            ))
+            db.commit()
+        with patch.object(main, "fetch_transcript", side_effect=AssertionError("A saved report must not call providers")):
+            response = self.client.post("/analyze", json={"ticker": "AAPL", "year": 2024, "quarter": 1})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["cached"])
+        self.assertEqual(response.json()["analysis"], REPORT)
 
     def test_missing_transcript_does_not_call_ai(self):
         with patch.object(main, "fetch_transcript", return_value=None), patch.object(main, "analyze_transcript") as ai:

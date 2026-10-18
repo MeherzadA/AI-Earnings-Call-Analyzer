@@ -86,7 +86,7 @@ def health():
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     # CHECK CACHE: Query for existing transcript with same ticker/year/quarter
-    existing_transcript = db.query(models.Transcript).filter(
+    existing_transcript = db.query(models.Transcript).join(models.Analysis).filter(
         models.Transcript.ticker == request.ticker.upper(),
         models.Transcript.year == request.year,
         models.Transcript.quarter == str(request.quarter)
