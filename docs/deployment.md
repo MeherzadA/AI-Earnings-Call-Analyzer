@@ -2,7 +2,17 @@
 
 The public frontend is hosted on Vercel, the API on Render, and PostgreSQL on Supabase Free. Production was verified end to end on October 18, 2026.
 
-## Verified production deployment
+## Verified evidence-report release
+
+- [Release PR #6](https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/pull/6) merged as `f1359d79ed4b2b2321b0bda1eab4e89923388a12`. Vercel reported a successful production deployment for that merge. Render deployed backend commit `dfa2c09adc4678550e9581ccf587f2b94eb8423b`; the subsequent code change was one frontend CSS rule.
+- Render build logs confirmed Python 3.11.17, successful application startup and HTTP 200 database health before the new frontend was released.
+- A fresh private backup preceded the nullable-column migration. The migration and example seeding preserved all 19 transcripts, 10 analyses, original fields and table RLS settings. TLS certificate verification remained enabled. The local PostgreSQL database was untouched.
+- The three examples were seeded from already-generated snapshots after source-hash, citation-offset and quantity checks. Six interpretations judged insufficient by the documented AI review were removed; the original assessed drafts remain in the public evaluation files. No independent human review has been performed.
+- One fresh public MSFT fiscal Q2 2024 request produced [report 20](https://earnings-analyzer-vercel2.vercel.app/?report=20), with four findings, financial highlights and Yahoo prices. The displayed call-day, next-day and fifth-day closes were $408.59, $397.58 and $405.49. Its transcript viewer loaded 43 passages and highlighted the selected quotation. Reloading the share URL showed “Saved report.”
+- The permanent [review evidence page](https://earnings-analyzer-vercel2.vercel.app/review.html) displayed all 18 AI assessments: 12 supported, 6 insufficiently supported, 0 contradicted. Human assessments remain separate at zero.
+- Before rollout, 29 Python tests, 7 Node tests and the production build passed. Local phone layouts and source/legacy states were checked. Final public verification was deliberately limited to the fresh report/source/saved-link flow at the owner's request; it was not a repeat of the full test matrix.
+
+## Initial database repair verification
 
 - Frontend: [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app).
 - API: [database health](https://earnings-analyzer-er72.onrender.com/health), returning HTTP 200 with `database: connected`.

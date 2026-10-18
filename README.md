@@ -8,12 +8,12 @@ The new report format prioritizes up to six findings with separate AI observatio
 
 **Reliability:** exact quote and numeric checks do not establish semantic accuracy. Three development candidates retained 11 of 18 proposed findings after mechanical checks. A separate AI assessment of 18 selected statements judged 12 supported and 6 insufficiently supported; the six interpretations were removed from the curated examples. These are fallible AI judgments. **No independent human review has been performed.** Read the [evaluation method, observed failures, and limitations](docs/evaluation.md); these counts are not a general accuracy rate.
 
-**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). Verified end to end on October 18, 2026 with a fresh analysis, prices, saved history, and cached reopening. See [deployment notes](docs/deployment.md).
+**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). The evidence-report release was verified publicly on October 18, 2026 with a fresh [Microsoft Q2 2024 report](https://earnings-analyzer-vercel2.vercel.app/?report=20), stock prices, transcript viewing, and saved-link reopening. See [deployment notes](docs/deployment.md).
 
 
-![Local UI preview](docs/images/homepage.jpg)
+![Public source-linked report](docs/images/evidence-report.png)
 
-*Interface preview with a real saved analysis.*
+*Public interface with a real saved Microsoft analysis and expandable evidence.*
 
 ## What it does
 
