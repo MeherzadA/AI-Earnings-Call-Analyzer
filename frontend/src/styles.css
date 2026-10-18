@@ -251,6 +251,13 @@ p, h1, h2, h3 { margin: 0; }
 .example-action { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--accent); }
 .report-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .report-actions .back-btn { padding: 8px 0; }
+.report-nav { display: flex; flex-wrap: wrap; gap: 8px 22px; border-block: 1px solid var(--border); }
+.report-nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-size: 12px; }
+#market-reaction, #concerns, #findings { scroll-margin-top: 30px; }
+.source-scope { font-size: 12px; line-height: 1.85; color: var(--ink-3); max-width: 850px; }
+.concerns-section { border-top: 1px solid #dbc7bf; margin-top: 12px; }
+.concerns-section .eyebrow { color: #974c3d; }
+.risk-coverage-note { padding: 20px; border: 1px solid #decfc5; border-radius: 12px; background: #faf5ef; font-size: 13px; line-height: 1.85; color: var(--ink-2); }
 .outline-btn { min-height: 44px; border: 1px solid var(--border-strong); border-radius: 8px; background: white; color: var(--accent); font-size: 11px; padding: 10px 16px; }
 .outline-btn:hover { background: var(--accent-light); }
 .text-btn { min-height: 44px; border: 0; background: transparent; color: var(--accent); font-size: 11px; padding: 8px 0; text-decoration: underline; text-underline-offset: 4px; }

@@ -28,6 +28,8 @@ Seven proposed findings were omitted: four quotation mismatches, two numeric/uni
 
 The original saved summaries and lists are preserved as a baseline for comparison. They have not received a human quality score. Current machine-readable results are in [results.json](../frontend/public/evaluation/results.json).
 
+The current `evidence-brief-3` prompt asks for critical reading of both management remarks and analyst Q&A, including negative performance and constraints. It does not force a negative finding or establish independent verification. The initial sample evaluates versions 1 and 2; version 3 has not received a new semantic evaluation. Existing examples also have explicitly recorded category corrections for disclosed concerns. Those display corrections do not change the frozen assessment statements or scores.
+
 ## Semantic review: the question quotation matching cannot answer
 
 The [review evidence](https://earnings-analyzer-vercel2.vercel.app/review.html) contains the first three retained observations and first three non-empty interpretations from each candidate: **18 items**. This selection rule was fixed before review; it does not select only statements that look correct. The page provides the cited excerpts, surrounding passage context, report provenance, and each AI assessment with its reason. The original candidate statements remain frozen, including failures.

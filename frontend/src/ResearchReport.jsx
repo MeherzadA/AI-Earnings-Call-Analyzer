@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 
-const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Risks", opportunities: "Opportunities" };
+const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Concerns & risks", opportunities: "Opportunities" };
 
 function Evidence({ citations, onSource }) {
   return <details className="finding-evidence">
@@ -73,27 +73,36 @@ function SourceViewer({ reportId, citation, expectedHash, onClose }) {
 export default function ResearchReport({ result, onUpgrade }) {
   const [source, setSource] = useState(undefined);
   const research = result.research;
+  const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
+  const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
   const openSource = (citation = null) => setSource(citation);
   return <>
     {research ? <>
       <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read full transcript ↗</button></div>
+      <p className="source-scope">Transcript-only brief: management’s account of the quarter, including analyst Q&A where available. Quotations show what was said; they do not independently verify it. This report has no SEC-filing or news cross-check.</p>
       <details className="checks-explainer"><summary>What has been checked?</summary>
         <p>Every displayed citation was matched to the saved transcript. Numeric values were compared with the cited excerpts. These checks do not establish that a claim or AI interpretation is supported, or that management’s statements are true.</p>
         <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length > 0 && `${research.checks.discarded.length} proposed items were omitted because source checks failed.`}</p>
-        {research.curation && <p>Selected statements in this example received a development-time AI review. {research.curation.changes.length} unsupported interpretations were removed. <a href="/review.html">Inspect the assessments and original drafts ↗</a></p>}
+        {research.curation && <p>Selected statements in this example received a development-time AI review. {research.curation.changes.filter((change) => change.field === "interpretation" && change.action === "removed").length} unsupported interpretations were removed. Concern categories may also be curated. <a href="/review.html">Inspect the assessments and original drafts ↗</a></p>}
         <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>
         <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method and limitations ↗</a>
       </details>
       {research.financial_highlights.length > 0 && <section className="financial-highlights" aria-label="Financial highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}>
         <h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} />
       </article>)}</section>}
-      <section className="research-findings" aria-labelledby="findings-title">
-        <div className="section-heading"><div><p className="eyebrow">THE QUARTER, IN FOCUS</p><h2 id="findings-title">What deserves your attention</h2></div><span>{research.findings.length} prioritized findings</span></div>
+      <section className="research-findings concerns-section" id="concerns" aria-labelledby="concerns-title">
+        <div className="section-heading"><div><p className="eyebrow">THE OTHER SIDE OF THE QUARTER</p><h2 id="concerns-title">Concerns & risks</h2></div><span>{concerns.length} retained {concerns.length === 1 ? "finding" : "findings"}</span></div>
+        <p className="section-description">Disclosed setbacks, constraints and uncertainties. These findings use the same source checks as the rest of the brief.</p>
+        {concerns.length ? concerns.map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />) : <p className="risk-coverage-note">No dedicated concern was retained in this saved report. That does not establish that the company has no risks. Negative results may also appear under Key developments; this brief is not a complete risk assessment.</p>}
+      </section>
+      <section className="research-findings" id="findings" aria-labelledby="findings-title">
+        <div className="section-heading"><div><p className="eyebrow">THE QUARTER, IN FOCUS</p><h2 id="findings-title">Key developments</h2></div><span>{developments.length} {developments.length === 1 ? "finding" : "findings"}</span></div>
         <p className="section-description">AI-written observations and interpretations, with their source evidence. Guidance describes management’s expectations.</p>
-        {research.findings.slice(0, 3).map((finding, i) => <FindingCard key={finding.id} finding={finding} index={i} onSource={openSource} />)}
-        {research.findings.length > 3 && <details className="more-findings"><summary>Explore {research.findings.length - 3} more {research.findings.length === 4 ? "finding" : "findings"} <span aria-hidden="true">↓</span></summary>
+        {!developments.length && <p className="section-description">All retained findings are shown in Concerns & risks above.</p>}
+        {developments.slice(0, 3).map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}
+        {developments.length > 3 && <details className="more-findings"><summary>Explore {developments.length - 3} more {developments.length === 4 ? "finding" : "findings"} <span aria-hidden="true">↓</span></summary>
           {Object.entries(SUBJECTS).map(([category, label]) => {
-            const remaining = research.findings.slice(3).filter((f) => f.category === category);
+            const remaining = developments.slice(3).filter((f) => f.category === category);
             return remaining.length > 0 && <section className="finding-group" key={category}><h3>{label}</h3>{remaining.map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}</section>;
           })}
         </details>}

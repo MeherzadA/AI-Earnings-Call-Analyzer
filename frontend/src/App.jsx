@@ -529,11 +529,12 @@ export default function App() {
         <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
         {shareStatus === "manual" && <p className="share-fallback">Copy this link: <a href={reportUrl(window.location.href, result.report_id)}>{reportUrl(window.location.href, result.report_id)}</a></p>}
         <div className="report-heading"><div><p className="eyebrow">EARNINGS CALL BRIEF</p><h1 ref={reportHeading} tabIndex={-1}>{result.ticker}<span>Q{result.quarter} {result.year}</span></h1></div><span className="report-status">{result.cached ? "Saved report" : "New brief saved"}</span></div>
-        <ResearchReport key={result.report_id} result={result} onUpgrade={() => handleSubmit(result, true)} />
-        <div className="market-section"><div className="section-heading"><div><p className="eyebrow">AFTER THE CALL</p><h2>How the market moved</h2></div></div>
+        <nav className="report-nav" aria-label="Report sections"><a href="#market-reaction">Market reaction</a>{result.research && <><a href="#concerns">Concerns & risks</a><a href="#findings">Key developments</a></>}</nav>
+        <div className="market-section" id="market-reaction"><div className="section-heading"><div><p className="eyebrow">AFTER THE CALL</p><h2>How the market moved</h2></div></div>
           <div className="return-metrics"><ReturnMetric label="1 trading day" value={result.return_1day} /><ReturnMetric label="5 trading days" value={result.return_5day} /><div className="return-context"><span className="card-label">Price context</span><p>Price movements provide context. They do not establish what caused the market’s reaction.</p></div></div>
           <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} />
         </div>
+        <ResearchReport key={result.report_id} result={result} onUpgrade={() => handleSubmit(result, true)} />
         <p className="report-note">Source matching checks quotations and numeric consistency. AI interpretations may still be unsupported; inspect the evidence and context.</p>
       </div>}
     </main>
