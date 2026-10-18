@@ -5,7 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.engine import make_url
 from fastapi import HTTPException
+import certifi
 
 from dotenv import load_dotenv
 import os
@@ -19,10 +21,15 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # create the actual connection to Postgres using DB URL
+connect_args = {"connect_timeout": 10} if DATABASE_URL and DATABASE_URL.startswith("postgresql") else {}
+if connect_args:
+    query = make_url(DATABASE_URL).query
+    if query.get("sslmode") == "verify-full" and not query.get("sslrootcert"):
+        connect_args["sslrootcert"] = certifi.where()
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"connect_timeout": 10} if DATABASE_URL and DATABASE_URL.startswith("postgresql") else {},
+    connect_args=connect_args,
 )
 
 # session is just talking to your DB: open session, do stuff, then close session

@@ -11,6 +11,14 @@ The public frontend is hosted on Vercel and the API on Render. The repair has be
 - Frontend: optional build-time `VITE_API_BASE_URL` and `VITE_FMP_API_KEY`. The existing Render URL is the default API base. All `VITE_` values are public.
 - `render.yaml` requires an existing database connection and does not provision or purchase a database.
 
+## Supabase connection
+
+Use the existing SQLAlchemy/psycopg2 backend with Supabase's **Session pooler** connection on port 5432. Obtain the actual hostname and username from the project's Connect dialog. The session pooler supports IPv4 on the Free plan without an IPv4 add-on.
+
+Set `sslmode=verify-full` in the backend connection URL. If no explicit `sslrootcert` is configured, the backend supplies the bundled Certifi CA certificates for server verification. Keep the URL in Render's environment settings. Enable row-level security on app tables and leave them inaccessible to Supabase's anonymous/authenticated Data API roles; the backend owns database access.
+
+Supabase Free may pause projects with low database activity over seven days. It is not an always-on availability guarantee. Source: [connection guidance](https://supabase.com/docs/guides/database/connecting-to-postgres), [pausing policy](https://supabase.com/docs/guides/platform/free-project-pausing).
+
 ## Before promoting
 
 1. Restore a reachable PostgreSQL connection; investigate existing resources and recovery before replacement. Require the provider's supported TLS configuration. Do not silently fall back to ephemeral SQLite on Render.

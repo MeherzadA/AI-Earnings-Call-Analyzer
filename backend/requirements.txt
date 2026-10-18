@@ -10,3 +10,4 @@ duckdb==1.4.3
 pandas==2.3.3
 numpy==2.2.6
 pydantic==2.12.5
+certifi==2026.2.25
