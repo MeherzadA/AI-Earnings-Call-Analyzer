@@ -52,7 +52,7 @@ class Analysis(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     transcript_id = Column(Integer, ForeignKey("transcripts.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     sentiment = Column(String(50))
     key_claims = Column(Text)
     red_flags = Column(Text)

@@ -1,12 +1,22 @@
 import os
+from pathlib import Path
+from typing import Literal
 from google import genai
+from google.genai import errors, types
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, ValidationError
+import httpx
 
-import json
+load_dotenv(Path(__file__).with_name(".env"))
 
-load_dotenv()
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+class AnalysisReport(BaseModel):
+    sentiment: Literal["positive", "neutral", "negative"]
+    sentiment_score: float = Field(ge=-1, le=1, allow_inf_nan=False)
+    summary: str = Field(min_length=1)
+    key_claims: list[str]
+    red_flags: list[str]
+    opportunities: list[str]
 
 def analyze_transcript(ticker: str, year: int, quarter: int, transcript_text: str) -> dict:
 
@@ -88,21 +98,31 @@ def analyze_transcript(ticker: str, year: int, quarter: int, transcript_text: st
     {transcript_text}
     """
     
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt
-    )
-    
-    raw = response.text.strip()
-    
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1]
-        raw = raw.rsplit("```", 1)[0]
-    
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("AI analysis is not configured on this server.")
+
     try:
-        return json.loads(raw)
-    except json.JSONDecodeError as e:
-        return {"error": f"Failed to parse Gemini response: {str(e)}", "raw": raw}
+        with genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=60000, retry_options=types.HttpRetryOptions(attempts=1)),
+        ) as client:
+            response = client.models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", response_schema=AnalysisReport,
+                ),
+            )
+        return AnalysisReport.model_validate_json(response.text or "").model_dump()
+    except errors.APIError as exc:
+        if exc.code == 429:
+            raise RuntimeError("The AI provider's quota is currently exhausted. Please try again later.") from exc
+        raise RuntimeError("The AI provider is unavailable. Please try again later.") from exc
+    except httpx.HTTPError as exc:
+        raise RuntimeError("The AI provider did not respond in time. Please try again later.") from exc
+    except ValidationError as exc:
+        raise RuntimeError("The AI provider returned an incomplete report. Please try again.") from exc
 
 
 if __name__ == "__main__":

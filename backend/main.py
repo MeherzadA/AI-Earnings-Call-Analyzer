@@ -18,10 +18,15 @@ source venv/bin/activate
 
 
 import json
+import logging
+from contextlib import asynccontextmanager
+from typing import Literal
+from sqlalchemy import func, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from database import engine, get_db
 
@@ -33,11 +38,17 @@ from analysis import analyze_transcript
 
 from prices import get_stock_returns
 
-# tells SQLAlcehmy to look at all models (python classes) and create the corresponding tables in Postgres if they dont exist yet
-# just a sfety net to keep models and DB in sync in case one is changed and forget to update the other (so Python and SQL schema always matching)
-models.Base.metadata.create_all(bind=engine)
+# Create missing tables on startup. Existing columns still require an explicit migration.
+@asynccontextmanager
+async def lifespan(app):
+    try:
+        models.Base.metadata.create_all(bind=engine)
+    except SQLAlchemyError as exc:
+        # Keep diagnostics available during a DB outage without logging connection strings.
+        logging.error("Database initialization failed (%s)", type(exc).__name__)
+    yield
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -48,19 +59,34 @@ app.add_middleware(
 )
 
 class AnalyzeRequest(BaseModel):
-    ticker: str
-    year: int
-    quarter: int
+    ticker: str = Field(min_length=1, max_length=10, pattern=r"^[A-Z][A-Z0-9.-]*$")
+    year: int = Field(ge=1990, le=2100)
+    quarter: int = Field(ge=1, le=4)
+
+    @field_validator("ticker", mode="before")
+    @classmethod
+    def normalize_ticker(cls, value):
+        return value.strip().upper() if isinstance(value, str) else value
 
 @app.get("/")
 def root():
-    return {"message": "Earnings analayzer API is running"}
+    return {"message": "Earnings Analyzer API is running"}
+
+
+@app.get("/health")
+def health():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
+    return {"status": "ok", "database": "connected"}
 
 
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     # CHECK CACHE: Query for existing transcript with same ticker/year/quarter
-    existing_transcript = db.query(models.Transcript).filter(
+    existing_transcript = db.query(models.Transcript).join(models.Analysis).filter(
         models.Transcript.ticker == request.ticker.upper(),
         models.Transcript.year == request.year,
         models.Transcript.quarter == str(request.quarter)
@@ -108,18 +134,21 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     if not transcript:
         raise HTTPException(status_code=404, detail=f"No transcript found for {request.ticker} Q{request.quarter} {request.year}")
     
-    result = analyze_transcript(
-        ticker=request.ticker,
-        year=request.year,
-        quarter=request.quarter,
-        transcript_text=transcript["content"]
-    )
-    
-    if "error" in result:
-        raise HTTPException(status_code=500, detail=result["error"])
+    try:
+        result = analyze_transcript(
+            ticker=request.ticker,
+            year=request.year,
+            quarter=request.quarter,
+            transcript_text=transcript["content"]
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     # Fetch stock returns (1-day and 5-day after earnings)
-    stock_returns = get_stock_returns(request.ticker, request.year, request.quarter)
+    stock_returns = get_stock_returns(
+        request.ticker, request.year, request.quarter,
+        earnings_date=transcript.get("report_date"),
+    )
 
     # request.ticker, request.year, request.quarter come from the API request
     # transcript["content"] is the raw text fetched from defeatbeta
@@ -173,34 +202,34 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     }
 
 @app.get("/history")
-def get_history(sort: str = "recent", limit: int = 10, db: Session = Depends(get_db)):
-    transcripts = db.query(models.Transcript).order_by(models.Transcript.id.desc()).all()
-    
-    results = []
-    for t in transcripts:
-        analysis = db.query(models.Analysis).filter(
-            models.Analysis.transcript_id == t.id
-        ).first()
-        if analysis:
-            results.append({
-                "ticker": t.ticker,
-                "year": t.year,
-                "quarter": t.quarter,
-                "sentiment": analysis.sentiment,
-                "sentiment_score": analysis.sentiment_score,
-                "summary": analysis.summary,
-                "return_1day": analysis.return_1day,
-                "return_5day": analysis.return_5day,
-            })
-    
-    if sort == "movers":
-        results = [r for r in results if r["return_1day"] is not None]
-        results.sort(key=lambda x: abs(x["return_1day"]), reverse=True)
-    elif sort == "drops":
-        results = [r for r in results if r["return_1day"] is not None]
-        results.sort(key=lambda x: x["return_1day"])
-    elif sort == "gains":
-        results = [r for r in results if r["return_1day"] is not None]
-        results.sort(key=lambda x: x["return_1day"], reverse=True)
-    
-    return {"history": results[:limit], "total": len(results)}
+def get_history(
+    sort: Literal["recent", "movers", "gains", "drops"] = "recent",
+    limit: int = Query(default=10, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Transcript, models.Analysis).join(
+        models.Analysis, models.Analysis.transcript_id == models.Transcript.id
+    )
+    if sort != "recent":
+        query = query.filter(models.Analysis.return_1day.isnot(None))
+    order = {
+        "recent": models.Transcript.id.desc(),
+        "movers": func.abs(models.Analysis.return_1day).desc(),
+        "gains": models.Analysis.return_1day.desc(),
+        "drops": models.Analysis.return_1day.asc(),
+    }[sort]
+    total = query.count()
+    results = [
+        {
+            "ticker": t.ticker,
+            "year": t.year,
+            "quarter": t.quarter,
+            "sentiment": analysis.sentiment,
+            "sentiment_score": analysis.sentiment_score,
+            "summary": analysis.summary,
+            "return_1day": analysis.return_1day,
+            "return_5day": analysis.return_5day,
+        }
+        for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all()
+    ]
+    return {"history": results, "total": total}

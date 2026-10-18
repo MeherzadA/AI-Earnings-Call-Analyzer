@@ -1,13 +1,1 @@
-fastapi==0.135.2
-uvicorn==0.42.0
-sqlalchemy==2.0.48
-psycopg2-binary==2.9.11
-python-dotenv==1.2.2
-httpx==0.28.1
-google-genai==1.69.0
-defeatbeta-api==0.0.45
-yfinance==1.2.0
-duckdb==1.4.3
-pandas==2.3.3
-numpy==2.2.6
-pydantic==2.12.5
+-r backend/requirements.txt
