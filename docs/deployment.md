@@ -43,8 +43,18 @@ Supabase Free may pause projects with low database activity over seven days. It 
 
 1. Restore a reachable PostgreSQL connection; investigate existing resources and recovery before replacement. Require the provider's supported TLS configuration. Do not silently fall back to ephemeral SQLite on Render.
 2. Inspect the existing schema. `create_all()` creates missing tables but does not migrate columns. Anonymous analyses require nullable `analyses.user_id`.
-3. Run `python -m unittest discover -s backend`, `node --test frontend/test/api.test.js`, and the frontend production build. Automated tests isolate their storage and mock providers.
+3. Run `python -m unittest discover -s backend`, `npm run test` from `frontend`, and the frontend production build. Automated tests isolate their storage and mock providers.
 4. Deploy the reviewed commit and verify the actual revision and Python runtime in Render and Vercel.
 5. Require `/health` to return 200 with a connected database. Confirm a fresh, real analysis saves, displays prices when available, appears in history, and reopens from cache through the public frontend. Check a missing transcript and a phone layout.
 
 A frontend deployment, a liveness response at `/`, or a local test alone does not establish that the public app is working.
+
+## Evidence-report release rollout
+
+Before deploying the evidence-report backend, export the current `transcripts` and `analyses` rows to a private backup, then apply `backend/migrations/001_research_reports.sql`. It adds only nullable `analyses.research_json`; original report columns remain intact. Check row counts and original values before and after. Do not commit the private backup or connection settings.
+
+The previous backend tolerates this added column. Deploy and verify the new backend before releasing the frontend that uses `/reports` and `/examples`. `/health` checks that the required column exists. Old clients keep cached legacy responses; only explicit `with_research: true` requests upgrade them. Existing report IDs and prices remain stable.
+
+The three prepared examples can be seeded from their already-generated, curated snapshots after verifying transcript hashes and IDs; seeding must not generate reports or replace original fields. A development-time AI review and its corrections are recorded separately; independent human review has not been performed. The review evidence is a versioned project artifact; optional browser assessments require export/import before they become published results.
+
+If code rollback is necessary, leave the additive column and original rows in place. Verify the deployed revision, a fresh analysis, read-only source/history/share reopening, errors, and mobile layouts separately from local test results.

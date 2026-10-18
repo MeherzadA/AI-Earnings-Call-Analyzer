@@ -20,8 +20,9 @@ source venv/bin/activate
 import json
 import logging
 from contextlib import asynccontextmanager
+from threading import Lock
 from typing import Literal
-from sqlalchemy import func, text
+from sqlalchemy import func, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, HTTPException, Depends, Query
@@ -37,6 +38,7 @@ from transcript import fetch_transcript
 from analysis import analyze_transcript
 
 from prices import get_stock_returns
+from research import legacy_analysis, source_hash, source_passages
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -62,6 +64,7 @@ class AnalyzeRequest(BaseModel):
     ticker: str = Field(min_length=1, max_length=10, pattern=r"^[A-Z][A-Z0-9.-]*$")
     year: int = Field(ge=1990, le=2100)
     quarter: int = Field(ge=1, le=4)
+    with_research: bool = False
 
     @field_validator("ticker", mode="before")
     @classmethod
@@ -77,129 +80,126 @@ def root():
 def health():
     try:
         with engine.connect() as connection:
-            connection.execute(text("SELECT 1"))
+            connection.execute(text("SELECT research_json FROM analyses LIMIT 0"))
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
     return {"status": "ok", "database": "connected"}
 
 
+def saved_report(db, ticker, year, quarter):
+    return db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(
+        models.Transcript.ticker == ticker,
+        models.Transcript.year == year,
+        models.Transcript.quarter == str(quarter),
+    ).order_by(models.Analysis.id.desc()).first()
+
+
+def report_response(transcript, analysis, cached=True):
+    research = json.loads(analysis.research_json) if analysis.research_json else None
+    if research and research["source_hash"] != source_hash(transcript.raw_text):
+        raise HTTPException(status_code=503, detail="This saved report no longer matches its transcript. Please run a new analysis.")
+    result = legacy_analysis(research) if research else {
+        "sentiment": analysis.sentiment, "sentiment_score": analysis.sentiment_score,
+        "summary": analysis.summary, "key_claims": json.loads(analysis.key_claims or "[]"),
+        "red_flags": json.loads(analysis.red_flags or "[]"), "opportunities": json.loads(analysis.opportunities or "[]"),
+    }
+    return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+            "quarter": int(transcript.quarter), "analysis": result, "research": research,
+            "daily_prices": json.loads(analysis.daily_prices or "[]"),
+            "return_1day": analysis.return_1day, "return_5day": analysis.return_5day, "cached": cached}
+
+
+def report_by_id(db, report_id):
+    row = db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(models.Analysis.id == report_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="This saved report was not found.")
+    return row
+
+
+@app.get("/reports/{report_id}")
+def read_report(report_id: int, db: Session = Depends(get_db)):
+    return report_response(*report_by_id(db, report_id))
+
+
+@app.get("/reports/{report_id}/transcript")
+def read_transcript(report_id: int, db: Session = Depends(get_db)):
+    transcript, analysis = report_by_id(db, report_id)
+    return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+            "quarter": int(transcript.quarter), "source_hash": source_hash(transcript.raw_text),
+            "passages": source_passages(transcript.raw_text)}
+
+
+@app.get("/examples")
+def examples(db: Session = Depends(get_db)):
+    periods = [("AAPL", 2024, "1"), ("NVDA", 2024, "4"), ("PYPL", 2025, "4")]
+    rows = db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(
+        tuple_(models.Transcript.ticker, models.Transcript.year, models.Transcript.quarter).in_(periods)
+    ).order_by(models.Analysis.id.desc()).all()
+    found = {}
+    for transcript, analysis in rows:
+        found.setdefault((transcript.ticker, transcript.year, transcript.quarter), {
+            "report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+            "quarter": int(transcript.quarter), "has_research": bool(analysis.research_json),
+        })
+    return {"examples": [found[key] for key in periods if key in found]}
+
+
+# ponytail: one free Render process; use a distributed generation limit if scaled to multiple workers.
+generation_lock = Lock()
+
+
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
-    # CHECK CACHE: Query for existing transcript with same ticker/year/quarter
-    existing_transcript = db.query(models.Transcript).join(models.Analysis).filter(
-        models.Transcript.ticker == request.ticker.upper(),
-        models.Transcript.year == request.year,
-        models.Transcript.quarter == str(request.quarter)
-    ).first()
-    
-    if existing_transcript:
-        # CACHE HIT: Fetch the existing analysis instead of calling Gemini
-        existing_analysis = db.query(models.Analysis).filter(
-            models.Analysis.transcript_id == existing_transcript.id
-        ).first()
-        
-        if existing_analysis:
-            # Deserialize JSON fields back to lists
-            cached_result = {
-                "sentiment": existing_analysis.sentiment,
-                "sentiment_score": existing_analysis.sentiment_score,
-                "summary": existing_analysis.summary,
-                "key_claims": json.loads(existing_analysis.key_claims),
-                "red_flags": json.loads(existing_analysis.red_flags),
-                "opportunities": json.loads(existing_analysis.opportunities)
-            }
-            
-            # Deserialize daily_prices if available
-            daily_prices = []
-            if existing_analysis.daily_prices:
-                daily_prices = json.loads(existing_analysis.daily_prices)
-            
-            return {
-                "ticker": request.ticker.upper(),
-                "year": request.year,
-                "quarter": request.quarter,
-                "analysis": cached_result,
-                "return_1day": existing_analysis.return_1day,
-                "return_5day": existing_analysis.return_5day,
-                "daily_prices": daily_prices,
-                "cached": True
-            }
-    
-    # CACHE MISS: Proceed with normal flow (fetch transcript, call Gemini, save to DB)
+    existing = saved_report(db, request.ticker, request.year, request.quarter)
+    if existing and existing[1].research_json:
+        stored = json.loads(existing[1].research_json)
+        if stored["source_hash"] == source_hash(existing[0].raw_text) or not request.with_research:
+            return report_response(*existing)
+    if existing and not request.with_research:
+        return report_response(*existing)
+    # A single generation at a time protects the shared free-tier quota and instance memory.
+    if not generation_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Another report is being prepared. Please try again shortly.")
     try:
-        transcript = fetch_transcript(request.ticker, request.year, request.quarter)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    
-    if not transcript:
-        raise HTTPException(status_code=404, detail=f"No transcript found for {request.ticker} Q{request.quarter} {request.year}")
-    
-    try:
-        result = analyze_transcript(
-            ticker=request.ticker,
-            year=request.year,
-            quarter=request.quarter,
-            transcript_text=transcript["content"]
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if existing:
+            db_transcript, db_analysis = existing
+            transcript = {"content": db_transcript.raw_text}
+        else:
+            try:
+                transcript = fetch_transcript(request.ticker, request.year, request.quarter)
+            except RuntimeError as error:
+                raise HTTPException(status_code=502, detail=str(error)) from error
+            if not transcript:
+                raise HTTPException(status_code=404, detail=f"No transcript found for {request.ticker} Q{request.quarter} {request.year}")
+        try:
+            result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
+                                        transcript_text=transcript["content"])
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        if existing:
+            # Upgrade only the new column; retain the original report and price fields.
+            db_analysis.research_json = json.dumps(result["research"])
+        else:
+            returns = get_stock_returns(request.ticker, request.year, request.quarter,
+                                        earnings_date=transcript.get("report_date"))
+            db_transcript = models.Transcript(ticker=request.ticker, year=request.year,
+                                             quarter=str(request.quarter), raw_text=transcript["content"])
+            db.add(db_transcript)
+            db.flush()
+            db_analysis = models.Analysis(
+                transcript_id=db_transcript.id, user_id=None, sentiment=result["sentiment"],
+                sentiment_score=result["sentiment_score"], summary=result["summary"],
+                key_claims=json.dumps(result["key_claims"]), red_flags=json.dumps(result["red_flags"]),
+                opportunities=json.dumps(result["opportunities"]), research_json=json.dumps(result["research"]),
+                return_1day=returns.get("return_1day"), return_5day=returns.get("return_5day"),
+                daily_prices=json.dumps(returns.get("daily_prices", [])),
+            )
+            db.add(db_analysis)
+        db.commit()
+        return report_response(db_transcript, db_analysis, cached=False)
+    finally:
+        generation_lock.release()
 
-    # Fetch stock returns (1-day and 5-day after earnings)
-    stock_returns = get_stock_returns(
-        request.ticker, request.year, request.quarter,
-        earnings_date=transcript.get("report_date"),
-    )
-
-    # request.ticker, request.year, request.quarter come from the API request
-    # transcript["content"] is the raw text fetched from defeatbeta
-    db_transcript = models.Transcript(
-        ticker=request.ticker.upper(),
-        quarter=str(request.quarter),
-        year=request.year,
-        raw_text=transcript["content"]
-    )
-    
-    # Stage the transcript to be saved — not written to DB yet
-    db.add(db_transcript)
-    
-    # flush() sends the INSERT to the DB session so Postgres assigns an id
-    # we need that id to link the analysis to this transcript below
-    # without flush(), db_transcript.id would be None
-    db.flush()
-    
-    # Create a new Analysis record linked to the transcript we just saved
-    # result is the dictionary returned by Gemini
-    # lists like key_claims need json.dumps() to convert them to a string for Text columns
-    db_analysis = models.Analysis(
-        transcript_id=db_transcript.id,
-        user_id=None,
-        sentiment=result.get("sentiment"),
-        summary=result.get("summary"),
-        key_claims=json.dumps(result.get("key_claims", [])),
-        red_flags=json.dumps(result.get("red_flags", [])),
-        opportunities=json.dumps(result.get("opportunities", [])),
-        sentiment_score=result.get("sentiment_score"),
-        return_1day=stock_returns.get("return_1day"),
-        return_5day=stock_returns.get("return_5day"),
-        daily_prices=json.dumps(stock_returns.get("daily_prices", []))
-    )
-    
-    # Stage the analysis to be saved
-    db.add(db_analysis)
-    
-    # commit() actually writes both the transcript and analysis to the database permanently
-    db.commit()
-    
-    return {
-        "ticker": request.ticker.upper(),
-        "year": request.year,
-        "quarter": request.quarter,
-        "analysis": result,
-        "return_1day": stock_returns.get("return_1day"),
-        "return_5day": stock_returns.get("return_5day"),
-        "daily_prices": stock_returns.get("daily_prices", []),
-        "cached": False
-    }
 
 @app.get("/history")
 def get_history(
@@ -219,17 +219,20 @@ def get_history(
         "drops": models.Analysis.return_1day.asc(),
     }[sort]
     total = query.count()
-    results = [
-        {
+    results = []
+    for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all():
+        display = legacy_analysis(json.loads(analysis.research_json)) if analysis.research_json else {
+            "sentiment": analysis.sentiment, "sentiment_score": analysis.sentiment_score,
+            "summary": analysis.summary,
+        }
+        results.append({
+            "report_id": analysis.id,
+            "has_research": bool(analysis.research_json),
             "ticker": t.ticker,
             "year": t.year,
             "quarter": t.quarter,
-            "sentiment": analysis.sentiment,
-            "sentiment_score": analysis.sentiment_score,
-            "summary": analysis.summary,
+            **{key: display[key] for key in ("sentiment", "sentiment_score", "summary")},
             "return_1day": analysis.return_1day,
             "return_5day": analysis.return_5day,
-        }
-        for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all()
-    ]
+        })
     return {"history": results, "total": total}
