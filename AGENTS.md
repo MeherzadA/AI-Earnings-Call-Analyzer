@@ -19,7 +19,7 @@
 - Start API (from `backend`): `uvicorn main:app --reload`
 
 ## Testing instructions
-- From the repo root: `python -m unittest discover -s backend` and `node --test frontend/test/api.test.js`.
+- From the repo root: `python -m unittest discover -s backend`; from `frontend`: `npm run test`.
 - Frontend production build: `cd frontend` then `npm run build`.
 - Automated tests mock external providers and use a temporary SQLite database.
 
@@ -33,3 +33,5 @@
 - `backend\schema.sql` documents the Postgres schema; `models.py` mirrors it.
 - `transcript.py` reads only the requested call remotely; it does not download the full dataset.
 - `analysis.py` calls `google-genai` (Gemini) and expects valid JSON output.
+- `research.py` validates cited excerpts and numeric consistency; these checks do not establish semantic accuracy. `evaluate.py` prepares/imports explicit human labels without model calls.
+- Existing databases need `backend/migrations/001_research_reports.sql` before this version starts. Preserve original report fields and never label pending human review as complete.

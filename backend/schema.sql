@@ -71,6 +71,7 @@ CREATE TABLE analyses (
     return_1day FLOAT,
     return_5day FLOAT,
     daily_prices TEXT,
+    research_json TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
