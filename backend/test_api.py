@@ -29,7 +29,7 @@ RESEARCH = check_research(ResearchDraft.model_validate(DRAFT), SOURCE, 2024, "te
 REPORT = {**legacy_analysis(RESEARCH), "research": RESEARCH}
 LEGACY = legacy_analysis(RESEARCH)
 CONTEXT = {"version": main.CONTEXT_VERSION, "call_date": "2024-02-01",
-           "previous_call": {"status": "available"}, "news": {"status": "empty"}, "filings": {"status": "empty"}}
+           "previous_call": {"status": "available"}, "news": {"status": "empty"}}
 
 
 class AnalysisFlowTests(unittest.TestCase):

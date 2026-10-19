@@ -7,18 +7,17 @@ from context import prior_outlook, compare_outlook, revenue_highlight, dated_new
 
 
 class ContextChecks(unittest.TestCase):
-    def test_failed_sources_retry_while_successful_sources_stay_cached(self):
-        cached = {"version": context.CONTEXT_VERSION, "call_date": "2024-02-01", "news": {"status": "available", "items": []}}
-        context.sec_tickers.cache_clear()
-        self.addCleanup(context.sec_tickers.cache_clear)
-        replies = [RuntimeError("Temporary SEC failure"), b'{"0":{"ticker":"AAPL","cik_str":320193}}', b'{"facts":{}}']
-        with patch("context.download", side_effect=replies) as download, patch("context.dated_news") as news:
-            failed = context.build_context("AAPL", 2024, 1, {"context": cached}, "2024-02-01", {"content": "Hello."})
-            self.assertFalse(context.context_complete(failed))
-            retried = context.build_context("AAPL", 2024, 1, {"context": failed}, "2024-02-01", {"content": "Hello."})
-            self.assertTrue(context.context_complete(retried))
-            self.assertEqual(download.call_count, 3)
+    def test_research_refresh_removes_sec_and_only_retries_failed_news(self):
+        cached = {"version": 4, "call_date": "2024-02-01", "filings": {"status":"unavailable"}, "news": {"status":"available", "items":[]}}
+        with patch("context.download", side_effect=AssertionError("No SEC requests")), patch("context.dated_news", return_value={"status":"empty", "items":[]}) as news:
+            current = context.build_context("AAPL", 2024, 1, {"context":cached}, "2024-02-01", {"content":"Hello."})
+            self.assertNotIn("filings", current)
+            self.assertTrue(context.context_complete(current))
             news.assert_not_called()
+            current["news"] = {"status":"unavailable"}
+            retried = context.build_context("AAPL", 2024, 1, {"context":current}, "2024-02-01", {"content":"Hello."})
+            self.assertTrue(context.context_complete(retried))
+            news.assert_called_once()
 
     def test_literal_revenue_fallback_preserves_its_source_and_rejects_wrong_scope(self):
         text = "Hello. Total revenue was $6.05 billion, down from a year ago."

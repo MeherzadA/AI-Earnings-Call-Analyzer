@@ -9,11 +9,11 @@ function Headline({ item }) {
 
 export default function ResearchContext({ result, onSource, active }) {
   const stored = result.context || result.research?.context;
-  const [context, setContext] = useState(stored?.version === 4 ? stored : null);
+  const [context, setContext] = useState(stored?.version === 5 ? stored : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const attempted = useRef(false);
-  const retrySources = context && ["previous_call", "news", "filings"].some((section) => context[section]?.status === "unavailable");
+  const retrySources = context && ["previous_call", "news"].some((section) => context[section]?.status === "unavailable");
   async function load() {
     setLoading(true); setError("");
     try { const data = await apiRequest(`/reports/${result.report_id}/context`, { method:"POST" }); setContext(data.context); }
@@ -46,7 +46,6 @@ export default function ResearchContext({ result, onSource, active }) {
         </> : <div className="no-fair-comparison"><h3>No fair forecast-to-result comparison is available</h3><p>{context.previous_call.status === "unavailable" ? "The earlier call could not be retrieved, so we cannot show its forecast alongside this result." : comparison.message}</p>{reported && <div className="unpaired-actual"><span>{target} revenue reported</span><strong>{reported.value}</strong>{reported.citations?.[0] && <><blockquote>“{reported.citations[0].quote}”</blockquote><button type="button" className="text-btn" onClick={()=>onSource(reported.citations[0])}>Read result in transcript ↗</button></>}</div>}<p className="comparison-footnote">Unmatched statements are omitted instead of being placed beside an unrelated result.</p></div>}
       </section>
       <section className="coverage-digest"><div className="digest-section-heading"><div><p className="section-kicker">COVERAGE AROUND THE CALL</p><h3>Related reporting</h3></div><span className="coverage-badge">{headlines.length} article links</span></div><p className="coverage-dates">{context.news.start ? `${callDateLabel(context.news.start)} – ${callDateLabel(context.news.end)}` : "Around the call"} · UTC publication dates</p><ul className="coverage-list">{headlines.map((item,i)=><Headline key={i} item={item}/>)}</ul>{!headlines.length && <p>{context.news.message || "The feed returned no matching historical headlines."}</p>}<p className="coverage-disclosure">{marketWindow(result)} A headline may describe a different after-hours or intraday window. These are reading links; article contents have not been analysed or used as evidence for the brief.</p></section>
-      {context.filings.status === "available" ? <section className="filing-digest"><div className="digest-section-heading"><div><p className="section-kicker">SEPARATE COMPANY FILING</p><h3>Revenue recorded in the filing</h3></div></div>{context.filings.facts?.map((fact,i)=><article className="filed-figure" key={i}><strong>{fact.value}</strong><p>{fact.label} · {fact.form}<br/>{callDateLabel(fact.period_start)} → {callDateLabel(fact.period_end)} · Filed {callDateLabel(fact.filed)}</p><a href={fact.url} target="_blank" rel="noreferrer">Open filing ↗</a></article>)}<p className="comparison-footnote">Company-filed figures are another company-authored source, not an independent audit of every claim.</p></section> : <div className="filing-status-note"><strong>SEC filing check {context.filings.status === "empty" ? "has no matching figure" : "unavailable"}</strong><p>{context.filings.message?.includes("403") ? "SEC rejected the automated data request (HTTP 403). This does not mean the company has no filings; no filing verification was completed." : context.filings.message || "Filing data could not be loaded."}</p><a href={context.filings.browse_url || `https://www.sec.gov/edgar/browse/?CIK=${result.ticker}&owner=exclude`} target="_blank" rel="noreferrer">Open {result.ticker} filings at the SEC ↗</a></div>}
       {retrySources && <button type="button" className="text-btn source-retry" disabled={loading} onClick={load}>{loading ? "Retrying unavailable sources…" : "Retry unavailable sources"}</button>}
     </>}
   </section>;
