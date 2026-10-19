@@ -2,10 +2,24 @@ from decimal import Decimal
 import unittest
 from unittest.mock import patch
 
-from context import prior_outlook, compare_outlook, dated_news
+from context import prior_outlook, compare_outlook, revenue_highlight, dated_news
 
 
 class ContextChecks(unittest.TestCase):
+    def test_worded_outlook_connects_to_the_same_quarter_reported_growth(self):
+        quote = "Today, Apple is reporting revenue of $119.6 billion for the December quarter, up 2% from a year ago despite having one less week in the quarter."
+        actual = revenue_highlight({"financial_highlights": [{"label": "Total Revenue", "value": "$119.6 billion", "citations": [{"quote": quote}]}]})
+        earlier = "Also, on foreign exchange, we expect a negative year-over-year revenue impact of about 1 percentage point. Despite having one less week this year, we expect our December quarter, total company revenue to be similar to last year. We expect iPhone revenue to grow year-over-year on an absolute basis."
+        outlooks = prior_outlook(earlier, 1, actual["period_terms"])
+        result = compare_outlook(outlooks, actual)
+        self.assertEqual(result["status"], "directional")
+        self.assertEqual(result["actual_change"], "2% growth year over year")
+        self.assertIn("similar to last year", result["outlook"]["quote"])
+        self.assertNotIn("range", result)
+        self.assertEqual(next(item for item in outlooks if "foreign exchange" in item["quote"])["metric_scope"], "currency_impact")
+        self.assertEqual(compare_outlook(prior_outlook(earlier, 2), actual)["status"], "unscored")
+        self.assertEqual(compare_outlook(prior_outlook("For next quarter, when we remove a prior-year impact, we expect revenue to be similar to last year.", 1), actual)["status"], "unscored")
+
     def test_disclaimer_and_past_results_are_not_forecasts(self):
         text = ("Please note our forward-looking statements include revenue, gross margin and our future business outlook. "
                 "Today, Apple reported revenue of $111.2 billion, at the high end of our guidance range. "

@@ -14,7 +14,7 @@ from transcript import fetch_transcript
 
 USER_AGENT = os.getenv("SEC_USER_AGENT", "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)")
 NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
-CONTEXT_VERSION = 2
+CONTEXT_VERSION = 3
 
 
 def download(url, *, params=None, limit=8_000_000):
@@ -40,12 +40,22 @@ def revenue_highlight(research):
         if re.search(r"\b(revenue|net sales)\b", label) and not any(word in label for word in ("annual", "full year", "cloud", "services", "iphone", "data center", "segment")):
             amounts = [value for value, kind, currency in quantities(item["value"]) if currency == "$" and kind == "number"]
             if len(amounts) == 1:
-                return {"label": item["label"], "value": item["value"], "amount": amounts[0], "citations": item["citations"]}
+                result = {"label": item["label"], "value": item["value"], "amount": amounts[0], "citations": item["citations"], "period_terms": []}
+                for citation in item["citations"]:
+                    for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z])", citation["quote"]):
+                        values = [value for value, kind, currency in quantities(sentence) if currency == "$" and kind == "number"]
+                        if values != amounts or not re.search(r"\b(?:revenue|net sales)\b", sentence, re.I) or re.search(r"\b(?:expect|forecast|constant currency|adjusted)\b", sentence, re.I):
+                            continue
+                        result["period_terms"] += re.findall(r"\b(?:January|February|March|April|May|June|July|August|September|October|November|December) quarter\b", sentence, re.I)
+                        change = re.search(r"\b(up|down)\s+(\d+(?:\.\d+)?)%\s+(?:year.over.year|from (?:a year ago|last year)|compared (?:with|to) (?:a year ago|last year))\b", sentence, re.I)
+                        if change:
+                            result["year_over_year"] = str(Decimal(change[2]) * (-1 if change[1].lower() == "down" else 1))
+                return result
     return None
 
 
-def prior_outlook(text, quarter):
-    """Conservative numeric revenue ranges only; leave ambiguous periods unscored."""
+def prior_outlook(text, quarter, period_terms=()):
+    """Extract explicit revenue expectations; leave ambiguous periods unscored."""
     results = []
     ordinal = ("first", "second", "third", "fourth")[quarter - 1]
     target = re.compile(rf"\b(?:Q{quarter}|{ordinal} quarter|next quarter)\b", re.I)
@@ -64,10 +74,11 @@ def prior_outlook(text, quarter):
             context = " ".join(sentences[max(0, i - 1):i + 1])
             if re.search(r"\b(?:above|below) our outlook\b", sentence, re.I) and not re.search(r"\bexpect|\banticipat", sentence, re.I):
                 continue
-            segment = bool(re.search(r"\b(?:segment|Productivity and Business Processes|Intelligent Cloud|Personal Computing|Data Center|Services|iPhone|gaming)\b", context, re.I))
+            segment = bool(re.search(r"\b(?:segment|Productivity and Business Processes|Intelligent Cloud|Personal Computing|Data Center|Services|iPhone|gaming)\b", sentence, re.I))
+            currency_impact = bool(re.search(r"foreign exchange|currency (?:impact|headwind|tailwind)", sentence, re.I))
             entry = {"quote": sentence, "passage_id": passage["id"], "context": passage["text"],
-                     "metric_scope": "segment_or_unclear" if segment else "company_revenue",
-                     "period_explicit": bool(target.search(context)) and not bool(re.search(r"\b(?:full year|annual|fiscal year)\b", context, re.I))}
+                     "metric_scope": "currency_impact" if currency_impact else "segment_or_unclear" if segment else "company_revenue",
+                     "period_explicit": (bool(target.search(context)) or any(term.lower() in context.lower() for term in period_terms)) and not bool(re.search(r"\b(?:full year|annual|fiscal year)\b", context, re.I))}
             # Scope a range to the revenue clause; do not use an EPS or expense range later in the sentence.
             forward_clause = sentence[future.start():]
             revenue_clause = re.split(r"\b(?:revenue|net sales)\b", forward_clause, maxsplit=1, flags=re.I)
@@ -86,26 +97,41 @@ def prior_outlook(text, quarter):
                 entry.update(low=str(center - delta), high=str(center + delta))
             if not any(item["quote"] == entry["quote"] for item in results):
                 results.append(entry)
-    return sorted(results, key=lambda item: ("low" in item, item["period_explicit"]), reverse=True)[:3]
+    return sorted(results, key=lambda item: (item["metric_scope"] == "company_revenue", item["period_explicit"], "low" in item), reverse=True)[:3]
 
 
 def compare_outlook(outlooks, actual):
     match = next((item for item in outlooks if "low" in item and item["period_explicit"] and item["metric_scope"] == "company_revenue"), None)
+    if actual and not match and "year_over_year" in actual:
+        for item in outlooks:
+            if not item["period_explicit"] or item["metric_scope"] != "company_revenue" or re.search(r"constant currency|adjusted|excluding|when we remove", item["quote"], re.I):
+                continue
+            if re.search(r"\b(?:similar|flat|unchanged)\b.*\b(?:last year|a year ago|year.over.year)\b", item["quote"], re.I):
+                change = Decimal(actual["year_over_year"])
+                direction = "grew" if change > 0 else "fell" if change < 0 else "was unchanged"
+                return {"status": "directional", "outlook": item, "expected": "Revenue broadly unchanged year over year",
+                        "actual_change": f"{abs(change):g}% {'growth' if change > 0 else 'decline' if change < 0 else 'change'} year over year",
+                        "headline": f"Revenue {direction} after an outlook of little change",
+                        "message": f"Management expected revenue similar to the prior year. This call reports {actual['value']}, {direction} {abs(change):g}% year over year." if change else f"Management expected little change, and this call reports unchanged year-over-year revenue of {actual['value']}.",
+                        "takeaway": ("Revenue increased rather than remaining flat. " if change > 0 else "Revenue declined rather than remaining flat. " if change < 0 else "The reported direction agrees with an outlook of little change. ") + "'Similar' has no stated numerical tolerance, so this does not establish an exact target was beaten or missed.",
+                        "limitation": "A directional comparison of management's statements, not independent verification or an analyst-consensus beat/miss."}
     if not match or not actual:
         if not actual:
-            reason = "This report has no comparable total-company quarterly revenue value."
+            reason = "The report does not include a total-company revenue result with which to test the earlier forecast."
         elif not outlooks:
-            reason = "No explicit revenue forecast was identified in the preceding call. Past results and disclaimer language are excluded."
+            reason = "No explicit revenue forecast was found in the previous call, so there is no identified revenue target to test. This does not prove management gave no guidance."
         elif not any(item.get("metric_scope") == "company_revenue" for item in outlooks):
-            reason = "The earlier forecasts concern business segments, not total-company revenue. Those figures cannot fairly be compared."
+            reason = "The earlier projections cover segments or currency effects. This check has only total-company revenue, so it cannot establish whether those projections were met."
         elif not any("low" in item for item in outlooks):
-            reason = "The earlier forecast does not provide a supported numerical revenue range."
+            reason = "Management described a revenue outlook in words, but this report lacks a matching year-over-year result or an unambiguous period. An amount alone cannot tell whether growth expectations were met."
         else:
-            reason = "The earlier range could not be confidently tied to this same fiscal quarter and revenue scope."
-        return {"status": "unscored", "message": reason}
+            reason = "The earlier forecast could not be tied to the same fiscal quarter and revenue scope. Comparing it with this result could give a misleading verdict."
+        return {"status": "unscored", "headline": "This report can’t establish whether revenue met the earlier outlook", "message": reason}
     value, low, high = actual["amount"], Decimal(match["low"]), Decimal(match["high"])
     position = "above" if value > high else "below" if value < low else "within"
+    takeaway = f"Reported revenue was {money(value - high)} above the top of management's earlier range." if value > high else f"Reported revenue was {money(low - value)} below the bottom of management's earlier range." if value < low else "Reported revenue landed inside management's earlier range."
     return {"status": "compared", "position": position, "range": f"{money(low)}–{money(high)}",
+            "outlook": match, "expected": f"{money(low)}–{money(high)}", "headline": f"Revenue was {position} management’s earlier range", "takeaway": takeaway,
             "actual": actual["value"], "quote": match["quote"], "message": f"Reported revenue was {position} the extracted prior outlook range.",
             "limitation": "Compares the stated, possibly rounded revenue figures. This is management's outlook, not analyst consensus; passage selection and metric scope still need inspection."}
 
@@ -188,6 +214,7 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
         raise RuntimeError("The call date could not be established. Dated research was not loaded.")
     call_date = date.fromisoformat(call_date[:10]).isoformat()
     previous_year, previous_quarter = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
+    actual = revenue_highlight(research)
     prior = {"year": previous_year, "quarter": previous_quarter, "outlooks": []}
     try:
         previous = previous or fetch_transcript(ticker, previous_year, previous_quarter)
@@ -195,15 +222,14 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
             previous = None
         if previous:
             prior.update(status="available", source_hash=source_hash(previous["content"]), report_date=previous.get("report_date"),
-                         outlooks=prior_outlook(previous["content"], quarter))
+                         outlooks=prior_outlook(previous["content"], quarter, actual.get("period_terms", []) if actual else []))
         else:
             prior.update(status="unavailable", message="The preceding fiscal call was not available.")
     except RuntimeError:
         prior.update(status="unavailable", message="The preceding transcript could not be retrieved.")
-    actual = revenue_highlight(research)
     comparison = compare_outlook(prior["outlooks"], actual)
     if actual:
-        comparison["reported"] = {key: value for key, value in actual.items() if key != "amount"}
+        comparison["reported"] = {key: value for key, value in actual.items() if key not in ("amount", "period_terms")}
     sections = {}
     cached = research.get("context", {})
     for name, provider in (("news", lambda: dated_news(ticker, call_date)), ("filings", lambda: filing_context(ticker, call_date, year, quarter))):
