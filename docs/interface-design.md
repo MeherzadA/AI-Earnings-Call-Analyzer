@@ -19,7 +19,7 @@ Earnings Analyzer is a tool for reading a call, checking its statements and comp
 - Avoid gradient banners, floating cards, pill-shaped category labels and animated entrances on every section. Keep normal hover/focus feedback and meaningful audio activity.
 - Keep body text readable at 16px, with smaller supporting metadata used sparingly. Keep the source controls and actual data visible.
 - Preserve AI attribution, source limitations and missing-data explanations. Visual cleanup must not imply additional verification or invent data.
-- The landing page can use a dark market-screen treatment: faint grid, cyan accents and a short chart entrance. Keep report-reading pages light. The landing page must stay open instead of automatically navigating to a random report; its preview and returns come from existing reports and are labelled historical.
+- Keep the landing page light: white surfaces, a faint grid, amber action button and restrained blue accents. Use a short chart entrance for movement; do not bring back the dark terminal theme. Keep report-reading pages light. The landing page must stay open instead of automatically navigating to a random report; its preview and returns come from existing reports and are labelled historical.
 
 ## Research used for this revision
 
