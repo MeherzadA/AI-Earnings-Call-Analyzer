@@ -124,6 +124,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
         <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method & limitations ↗</a>
       </details>
     </> : <section className="legacy-report">
+      <section className="call-panel"><div className="panel-heading"><h2>Listen to this call</h2></div><CallReplay key={result.report_id} result={result} /></section>
       <div className="legacy-notice"><div><h2>This is an earlier report</h2><p>Source checks are unavailable. A new brief can use the saved transcript; the original is retained.</p></div><button className="outline-btn" type="button" onClick={onUpgrade}>Build source-based report ↗</button></div>
       <div className="card legacy-summary"><p className="card-label">Earlier AI summary</p><p>{result.analysis.summary}</p><button type="button" className="text-btn" onClick={() => openSource()}>Read the saved transcript ↗</button></div>
       {marketPanel && <aside className="market-sidebar">{marketPanel}</aside>}

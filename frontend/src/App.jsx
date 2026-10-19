@@ -5,9 +5,9 @@ import ResearchReport, { SourceViewer } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 
 const EXAMPLES = [
-  { ticker: "AAPL", name: "Apple", period: "Q1 2024", description: "Revenue, Services, and management’s outlook." },
-  { ticker: "NVDA", name: "NVIDIA", period: "Q4 2024", description: "Growth, demand, and margin guidance." },
-  { ticker: "PYPL", name: "PayPal", period: "Q4 2025", description: "Payments, profitability, and the outlook." },
+  { ticker: "AAPL", name: "Apple", period: "Q1 FY2024", headline: "Apple’s record Services quarter, in context.", description: "Revenue, product declines, and what management expected next." },
+  { ticker: "NVDA", name: "NVIDIA", period: "Q4 FY2024", headline: "NVIDIA: growth, demand & the outlook", description: "Read the forecast alongside the reported result." },
+  { ticker: "PYPL", name: "PayPal", period: "Q4 FY2025", headline: "PayPal: payments, profit & the next quarter", description: "Inspect the claims, concerns, and original source passages." },
 ];
 
 function CompanyMark({ ticker }) {
@@ -270,11 +270,28 @@ function MarketPanel({ result, compact = false }) {
 
 function ExampleFeed({ onSelect }) {
   return <section className="examples-section" aria-labelledby="examples-title">
-    <div className="section-heading"><div><p className="eyebrow">THE STARTING FILES</p><h2 id="examples-title">Open a research brief</h2></div><span>Saved examples · No generation</span></div>
+    <div className="home-section-heading"><h2 id="examples-title">Featured calls</h2><span>Saved reports · No new AI generation</span></div>
     <div className="example-grid">{EXAMPLES.map((card) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
-        <span className="example-top"><span className="example-ticker">{card.ticker}</span><span>{card.period}</span></span>
-        <h3>{card.name}</h3><p>{card.description}</p><span className="example-action">Open saved report <span aria-hidden="true">↗</span></span>
+        <span className="example-top"><span className="example-issuer"><CompanyMark ticker={card.ticker} /><span>{card.name}<small>{card.ticker} · {card.period}</small></span></span><span aria-hidden="true">↗</span></span>
+        <h3>{card.headline}</h3><p>{card.description}</p><span className="example-action">Read the brief <span aria-hidden="true">→</span></span>
       </button>)}</div>
+  </section>;
+}
+
+function marketReturn(value) { return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`; }
+
+function SavedMarketTape({ calls, loading, onSelect }) {
+  return <section className="market-tape" aria-label="Historical one-day stock reactions from saved earnings calls">
+    <span className="tape-label">AFTER EARNINGS<small>Historical · 1 trading day</small></span>
+    <div className="tape-calls">{calls.map((call) => <button type="button" key={call.report_id} onClick={() => onSelect(call)}><span><strong>{call.ticker}</strong><small>Q{call.quarter} FY{call.year}</small></span><span className={call.return_1day < 0 ? "loss" : "gain"}>{marketReturn(call.return_1day)}</span></button>)}{!calls.length && <p>{loading ? "Loading saved call reactions…" : "Stock reactions appear here when a saved report has price data."}</p>}</div>
+  </section>;
+}
+
+function CallMovers({ calls, loading, onSelect }) {
+  const scale = Math.max(1, ...calls.map((call) => Math.abs(call.return_1day)));
+  return <section className="call-movers" aria-labelledby="movers-title"><div className="home-section-heading"><h2 id="movers-title">Post-call moves</h2><span>1 trading day</span></div><p>How shares moved after these saved calls.</p>
+    <div className="movers-rows">{calls.map((call) => <button type="button" key={call.report_id} className="mover-row" onClick={() => onSelect(call)}><span className="mover-issuer"><strong>{call.ticker}</strong><small>Q{call.quarter} FY{call.year}</small></span><span className="mover-plot" aria-hidden="true"><span style={{ width: `${Math.abs(call.return_1day) / scale * 50}%`, left: call.return_1day < 0 ? "auto" : "50%", right: call.return_1day < 0 ? "50%" : "auto" }} className={call.return_1day < 0 ? "mover-negative" : "mover-positive"} /></span><strong className={call.return_1day < 0 ? "loss" : "gain"}>{marketReturn(call.return_1day)}</strong></button>)}{!calls.length && <p className="movers-empty">{loading ? "Loading the saved market data…" : "No saved stock reactions available."}</p>}</div>
+    <p className="movers-note">Historical returns from the call-day close. These are not live quotes, and a move alone does not establish its cause.</p>
   </section>;
 }
 
@@ -290,7 +307,7 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
   return (
     <section className="history-section" aria-labelledby="history-title" aria-busy={loading}>
       <div className="history-header">
-        <div><p className="eyebrow">THE RESEARCH ARCHIVE</p><h2 className="history-title" id="history-title">Saved reports <span>{total}</span></h2><p className="history-caption">Shared research from this demo</p></div>
+        <div><h2 className="history-title" id="history-title">The call archive <span>{total}</span></h2><p className="history-caption">Saved analysis · Market returns are measured after each call</p></div>
         <div className="history-filters">
           {filters.map((f) => (
             <button
@@ -312,12 +329,6 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
           const r1 = item.return_1day;
           const positiveReturn = r1 !== null && r1 > 0;
           const negativeReturn = r1 !== null && r1 < 0;
-          const sentimentColor =
-            item.sentiment === "positive"
-              ? "#16a34a"
-              : item.sentiment === "negative"
-              ? "#dc2626"
-              : "#6b7280";
 
           return (
             <button
@@ -337,8 +348,8 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
               <div className="history-mid">
                 <span
                   className="history-sentiment"
-                  style={{ color: sentimentColor }}
                 >
+                  <small>AI tone · </small>
                   {item.sentiment
                     ? item.sentiment.charAt(0).toUpperCase() +
                       item.sentiment.slice(1)
@@ -424,6 +435,13 @@ export default function App() {
   const displayedReport = useRef(null);
   const callDate = result?.research?.call_date || result?.daily_prices?.[0]?.date;
   const concernCount = result?.research?.findings.filter((finding) => finding.category === "risks").length || 0;
+  const marketCalls = useMemo(() => {
+    const seen = new Set();
+    return history.filter((item) => {
+      if (!Number.isFinite(item.return_1day) || seen.has(item.ticker)) return false;
+      seen.add(item.ticker); return true;
+    }).slice(0, 5);
+  }, [history]);
 
   useEffect(() => { setReportView("overview"); setSource(undefined); }, [result?.report_id]);
 
@@ -511,25 +529,23 @@ export default function App() {
     catch { setShareStatus("manual"); }
   }
 
-  return <div className={`app ${result ? "has-report" : ""}`}>
+  return <div className={`app ${result ? "has-report" : "home-page"}`}>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="app-header"><div className="header-inner">
       <a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-mark" aria-hidden="true">EA</span><span><span className="brand-name">Earnings Analyzer</span><span className="brand-caption">THE TRANSCRIPT RESEARCH DESK</span></span></a>
       <nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()} aria-current={!result ? "page" : undefined}>Research desk</button><a href="/review.html">Quality & evaluation</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav>
     </div></header>
     <main className="main" id="main">
+      {!result && <><div className="home-masthead"><div><p className="eyebrow">COMPANIES / EARNINGS / EVIDENCE</p><h1>Earnings desk<span>.</span></h1></div><p>Read the quarter. Hear the call.<br/>Check what backs it up.</p></div><SavedMarketTape calls={marketCalls} loading={historyLoading} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} /></>}
       <div className="search-section">
-        {!result && <><div className="hero-editorial"><div><span className="eyebrow">YOUR NEXT EARNINGS CALL, IN FOCUS</span>
-        <h1 className="hero-title">Earnings call research.<br/><span>From statement to evidence.</span></h1></div>
-        <div className="hero-margin"><p className="hero-sub">What management said. What needs scrutiny. How the market moved.</p><p>A concise AI brief with the original source attached—so you can form your own view.</p><span className="hero-edition">TRANSCRIPT RESEARCH / PUBLIC DEMO</span></div></div>
-        <div className="search-caption"><span>01 / SELECT A CALL</span><span>Company fiscal periods</span></div>
+        {!result && <><div className="search-caption"><span>RESEARCH A COMPANY</span><span>Company fiscal periods</span></div>
         <SearchBar onSubmit={handleSubmit} loading={loading} period={result} />
-        <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies. Saved examples below open without generating a new report.</p></>}
+        <p className="period-help">Choose a ticker and fiscal period, or open a saved call below. Transcript coverage varies.</p></>}
         {result && <div className="report-search"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></div>}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
       {!result && !loading && <>
-        <ExampleFeed onSelect={(ticker) => loadReport(`/examples/${ticker}`)} />
+        <div className="home-desk-grid"><ExampleFeed onSelect={(ticker) => loadReport(`/examples/${ticker}`)} /><CallMovers calls={marketCalls} loading={historyLoading} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} /></div>
         <HistoryFeed history={history} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} sort={sort} setSort={(value) => { setSort(value); setLimit(20); }} limit={limit} setLimit={setLimit} total={total} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} />
       </>}
       {loading && <div className="loading-state" role="status" aria-live="polite">

@@ -1,7 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { audioTime, callAudioUrl } from "./audio.js";
+import TranscriptReader from "./TranscriptReader.jsx";
 
 export default function CallReplay({ result }) {
+  const url = callAudioUrl(result);
+  const [reader, setReader] = useState(!url);
+  const [reason, setReason] = useState("");
+  if (reader) return <TranscriptReader result={result} reason={reason} onRecording={url ? () => { setReader(false); setReason(""); } : null} />;
+  return <RecordingPlayer result={result} url={url} onReader={(message = "") => { setReason(message); setReader(true); }} />;
+}
+
+function RecordingPlayer({ result, url, onReader }) {
   const audio = useRef(null);
   const canvas = useRef(null);
   const graph = useRef(null);
@@ -10,7 +19,6 @@ export default function CallReplay({ result }) {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState("");
-  const url = callAudioUrl(result);
 
   useEffect(() => {
     const element = audio.current;
@@ -56,7 +64,7 @@ export default function CallReplay({ result }) {
       await graph.current?.context.resume();
       await element.play();
     } catch {
-      setError("The recording could not play. Try again or open the audio source.");
+      setError("The recording could not play. Try again, or use transcript read-aloud below.");
       setPlaying(false);
     } finally { setBuffering(false); }
   }
@@ -67,8 +75,6 @@ export default function CallReplay({ result }) {
     setPosition(next);
   }
 
-  if (!url) return <div className="replay-unavailable"><span aria-hidden="true">◉</span><p>Audio isn’t available for this call.<small>The free audio source covers Apple and Microsoft. You can still explore this call’s transcript below.</small></p></div>;
-
   return <div className="call-replay">
     <audio ref={audio} src={url} crossOrigin="anonymous" preload="none"
       onPlaying={() => { setPlaying(true); setBuffering(false); }}
@@ -78,7 +84,7 @@ export default function CallReplay({ result }) {
       onEnded={() => setPlaying(false)}
       onTimeUpdate={(event) => setPosition(event.currentTarget.currentTime)}
       onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
-      onError={() => { setError("This recording is unavailable right now. Try again later or open the audio source."); setPlaying(false); setBuffering(false); }}
+      onError={() => onReader("The original recording couldn’t be loaded.")}
     />
     <div className={`audio-player ${playing ? "audio-playing" : ""}`}>
       <div className="audio-status"><span>{buffering ? "Buffering audio…" : playing ? "Playing the original call" : position ? "Playback paused" : "Full earnings call"}</span><span>Q{result.quarter} FY{result.year}</span></div>
@@ -88,6 +94,6 @@ export default function CallReplay({ result }) {
       <div className="audio-transport"><button type="button" className="audio-play" onClick={togglePlayback} disabled={buffering && !playing} aria-label={playing ? "Pause call audio" : "Play call audio"}>{buffering ? <span className="spinner" /> : <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>}</button><button type="button" className="audio-skip" disabled={!duration} onClick={() => seek(position - 15)} aria-label="Skip back 15 seconds">↶<small>15</small></button><button type="button" className="audio-skip" disabled={!duration} onClick={() => seek(position + 15)} aria-label="Skip forward 15 seconds">↷<small>15</small></button><span className="audio-clock">{audioTime(position)} <span>/ {duration ? audioTime(duration) : "—:—"}</span></span><label className="sr-only" htmlFor="audio-speed">Playback speed</label><select id="audio-speed" className="audio-speed" defaultValue="1" onChange={(event) => { audio.current.playbackRate = Number(event.target.value); }}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
     </div>
     {error && <p className="audio-error" role="alert">{error}</p>}
-    <p className="replay-credit">Audio via <a href="https://earningscall.biz/docs/audio" target="_blank" rel="noreferrer">EarningsCall</a> · <a href={url} target="_blank" rel="noreferrer">Open audio source ↗</a></p>
+    <p className="replay-credit">Original audio via <a href="https://earningscall.biz/docs/audio" target="_blank" rel="noreferrer">EarningsCall</a> · <a href={url} target="_blank" rel="noreferrer">Open audio source ↗</a> · <button type="button" onClick={() => onReader("You selected transcript read-aloud.")}>Use transcript read-aloud</button></p>
   </div>;
 }
