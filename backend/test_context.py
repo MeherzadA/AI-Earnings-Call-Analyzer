@@ -14,6 +14,15 @@ class ContextChecks(unittest.TestCase):
         self.assertEqual(text[citation["start"]:citation["end"]], citation["quote"])
         for text in ("Total revenue was lower than $8 billion last year.", "Gaming total revenue was $2 billion.", "We expect total revenue was $6 billion."):
             self.assertIsNone(transcript_revenue(text))
+        text = "Q4 revenue was $6.05 billion, up 2% sequentially. Full year revenue was $27 billion."
+        item = transcript_revenue(text, 4)
+        self.assertEqual(item["value"], "$6.05 billion")
+        self.assertIsNone(transcript_revenue(text, 3))
+        earlier = "Let me turn to the outlook for the fourth quarter of fiscal 2023. We expect modest growth. We expect continued production shipments. Revenue is expected to be $6 billion, plus or minus 2%."
+        outlooks = prior_outlook(earlier, 4, year=2023)
+        self.assertTrue(outlooks[0]["period_explicit"])
+        self.assertFalse(prior_outlook(earlier, 4, year=2024)[0]["period_explicit"])
+        self.assertEqual(compare_outlook(outlooks, revenue_highlight({"financial_highlights":[item]}))["position"], "within")
 
     def test_worded_outlook_connects_to_the_same_quarter_reported_growth(self):
         quote = "Today, Apple is reporting revenue of $119.6 billion for the December quarter, up 2% from a year ago despite having one less week in the quarter."

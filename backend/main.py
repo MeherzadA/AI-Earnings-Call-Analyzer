@@ -172,7 +172,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
         call_date = research.get("call_date") or (prices[0]["date"] if prices else None)
         context_source = {**research}
         if not context_source.get("financial_highlights"):
-            revenue = transcript_revenue(transcript.raw_text)
+            revenue = transcript_revenue(transcript.raw_text, int(transcript.quarter))
             context_source["financial_highlights"] = [revenue] if revenue else []
         try:
             context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), context_source, call_date,
