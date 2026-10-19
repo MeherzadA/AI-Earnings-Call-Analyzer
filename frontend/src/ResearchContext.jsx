@@ -28,6 +28,8 @@ export default function ResearchContext({ result, onSource, active }) {
   }, [active, context]);
   const comparison = context?.comparison;
   const otherOutlooks = context?.previous_call.outlooks.filter((outlook) => outlook.quote !== comparison?.outlook?.quote) || [];
+  const targetPeriod = `Q${result.quarter} FY${result.year}`;
+  const baselinePeriod = `Q${result.quarter} FY${result.year - 1}`;
   return <section className="research-context" aria-labelledby="context-title">
     <div className="section-heading"><div><p className="eyebrow">EXPECTATION → OUTCOME</p><h2 id="context-title">Did revenue deliver on management’s outlook?</h2></div></div>
     <p className="section-description">The previous call looked ahead to this quarter. Here we connect that revenue expectation with what the company now reports, so you can assess how the outcome lined up.</p>
@@ -36,12 +38,12 @@ export default function ResearchContext({ result, onSource, active }) {
     {context && <>
       <p className="context-stamp">Call date: {context.call_date} · Saved {new Date(context.loaded_at).toLocaleDateString()} · No additional AI generation</p>
       <section className="context-card card" aria-labelledby="outlook-title">
-        <p className="guidance-connection">Q{context.previous_call.quarter} FY{context.previous_call.year} forecast <span aria-hidden="true">→</span> Q{result.quarter} FY{result.year} result <span>Same quarter being assessed: Q{result.quarter} FY{result.year}</span></p>
+        <p className="guidance-connection">Expected {targetPeriod} <span aria-hidden="true">→</span> Actual {targetPeriod}<span>Forecast made during the Q{context.previous_call.quarter} FY{context.previous_call.year} call.{comparison.status === "directional" && ` Both sides compare ${targetPeriod} with ${baselinePeriod}.`}</span></p>
         <div className="context-card-heading"><h3 id="outlook-title">{comparison.headline}</h3><span className="context-status">{comparison.status === "directional" ? "Direction only · no exact target" : comparison.status === "compared" ? "Compared with management’s target" : "Not enough matching evidence"}</span></div>
         {comparison.outlook ? <>
           <div className="comparison-values">
-            <div className="previous-value"><span>WHAT MANAGEMENT EXPECTED FOR Q{result.quarter}</span><strong>{comparison.expected}</strong><p>Stated in the Q{context.previous_call.quarter} FY{context.previous_call.year} call.</p><details className="prior-outlook"><summary>Read the earlier forecast</summary><QuoteContext outlook={comparison.outlook} /></details></div>
-            <div className="current-value"><span>WHAT IT REPORTED FOR Q{result.quarter}</span><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <p className="actual-change">{comparison.actual_change}</p>}<p>Reported in this call, dated {context.call_date}.</p>{comparison.reported?.citations.map((citation, i) => <details className="prior-outlook" key={i}><summary>Read the reported result</summary><blockquote><mark>{citation.quote}</mark></blockquote><button type="button" className="text-btn" onClick={() => onSource(citation)}>Open in this call’s transcript ↗</button></details>)}</div>
+            <div className="previous-value"><span>FORECAST FOR {targetPeriod}</span><strong>{comparison.status === "directional" ? `Revenue broadly unchanged vs ${baselinePeriod}` : comparison.expected}</strong><p>Looking ahead to {targetPeriod} from the Q{context.previous_call.quarter} FY{context.previous_call.year} call.</p><details className="prior-outlook"><summary>Read the earlier forecast</summary><QuoteContext outlook={comparison.outlook} /></details></div>
+            <div className="current-value"><span>ACTUAL RESULT FOR {targetPeriod}</span><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <p className="actual-change">{comparison.actual_change.replace("year over year", `vs ${baselinePeriod}`)}</p>}<p>Reported for {targetPeriod} in the call dated {context.call_date}.</p>{comparison.reported?.citations.map((citation, i) => <details className="prior-outlook" key={i}><summary>Read the reported result</summary><blockquote><mark>{citation.quote}</mark></blockquote><button type="button" className="text-btn" onClick={() => onSource(citation)}>Open in this call’s transcript ↗</button></details>)}</div>
           </div>
           <div className="guidance-takeaway"><h4>WHAT THIS TELLS YOU</h4><p>{comparison.takeaway}</p></div>
         </> : <><p>{context.previous_call.status === "unavailable" ? context.previous_call.message : comparison.message}</p>{comparison.reported && <p className="context-notice">This quarter’s reported total revenue is {comparison.reported.value}. That amount alone does not show whether an earlier growth forecast was met.</p>}</>}
