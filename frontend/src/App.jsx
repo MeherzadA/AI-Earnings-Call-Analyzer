@@ -4,6 +4,12 @@ import { apiRequest } from "./api.js";
 import ResearchReport from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 
+const EXAMPLES = [
+  { ticker: "AAPL", name: "Apple", period: "Q1 2024", description: "Revenue, Services, and management’s outlook." },
+  { ticker: "NVDA", name: "NVIDIA", period: "Q4 2024", description: "Growth, demand, and margin guidance." },
+  { ticker: "PYPL", name: "PayPal", period: "Q4 2025", description: "Payments, profitability, and the outlook." },
+];
+
 function currentQuarter(date) {
   const month = date.getMonth() + 1;
   if (month <= 3) return 1;
@@ -151,7 +157,7 @@ function SearchBar({ onSubmit, loading, period }) {
       <button className="analyze-btn" disabled={loading}>
         {loading ? (
           <span className="btn-inner">
-            <span className="spinner" /> Analyzing
+            <span className="spinner" /> {loading === "saved" ? "Opening report" : "Analyzing"}
           </span>
         ) : (
           <span className="btn-inner">Analyze call <span aria-hidden="true">↗</span></span>
@@ -162,7 +168,7 @@ function SearchBar({ onSubmit, loading, period }) {
   );
 }
 
-function StockPriceChart({ dailyPrices, ticker }) {
+function StockPriceChart({ dailyPrices, ticker, compact = false }) {
   if (!dailyPrices || dailyPrices.length === 0) {
     return <div className="card price-empty"><p className="card-label">Market reaction</p><h3>Price data unavailable</h3><p>The transcript report is saved. Daily prices may be missing for recent calls or when the price provider is unavailable.</p></div>;
   }
@@ -178,7 +184,7 @@ function StockPriceChart({ dailyPrices, ticker }) {
     <div className="card chart-card">
       <div className="chart-heading"><div><p className="card-label">Market reaction</p><h3 className="chart-title">{ticker} after the call</h3></div><span className="chart-source">Daily close · USD</span></div>
       
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={compact ? 230 : 300}>
         <LineChart
           data={chartData}
           margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
@@ -216,8 +222,8 @@ function StockPriceChart({ dailyPrices, ticker }) {
           <Line
             type="linear"
             dataKey="price"
-            stroke="#24533f"
-            dot={{ fill: "#24533f", r: 4 }}
+            stroke="#267260"
+            dot={{ fill: "#267260", r: 4 }}
             activeDot={{ r: 7 }}
             isAnimationActive={false}
             name="Close Price"
@@ -250,22 +256,17 @@ function ReturnMetric({ label, value }) {
 
 function MarketPanel({ result, compact = false }) {
   return <section className={`market-panel ${compact ? "market-panel-compact" : ""}`} aria-labelledby="market-title">
-    <div className="section-heading"><div><p className="eyebrow">AFTER THE CALL</p><h2 id="market-title">Market reaction</h2></div></div>
+    <div className="panel-heading"><div><p className="eyebrow">MARKET / DAILY PRICES</p><h2 id="market-title">After the call</h2></div><span className="panel-tag">Daily closes</span></div>
     <div className="return-metrics"><ReturnMetric label="1 trading day" value={result.return_1day} /><ReturnMetric label="5 trading days" value={result.return_5day} /></div>
-    <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} />
+    <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} compact={compact} />
     <p className="market-caveat">Price movements provide context, not proof of what caused the reaction.</p>
   </section>;
 }
 
 function ExampleFeed({ onSelect }) {
-  const cards = [
-    { ticker: "AAPL", name: "Apple", period: "Q1 2024", description: "Revenue, Services, and management’s outlook." },
-    { ticker: "NVDA", name: "NVIDIA", period: "Q4 2024", description: "Growth, demand, and margin guidance." },
-    { ticker: "PYPL", name: "PayPal", period: "Q4 2025", description: "Payments, profitability, and the outlook." },
-  ];
   return <section className="examples-section" aria-labelledby="examples-title">
-    <div className="section-heading"><div><p className="eyebrow">START WITH A SAVED CALL</p><h2 id="examples-title">Explore the evidence yourself</h2></div><span>No generation needed</span></div>
-    <div className="example-grid">{cards.map((card) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
+    <div className="section-heading"><div><p className="eyebrow">THE STARTING FILES</p><h2 id="examples-title">Open a research brief</h2></div><span>Saved examples · No generation</span></div>
+    <div className="example-grid">{EXAMPLES.map((card) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
         <span className="example-top"><span className="example-ticker">{card.ticker}</span><span>{card.period}</span></span>
         <h3>{card.name}</h3><p>{card.description}</p><span className="example-action">Open saved report <span aria-hidden="true">↗</span></span>
       </button>)}</div>
@@ -284,7 +285,7 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
   return (
     <section className="history-section" aria-labelledby="history-title" aria-busy={loading}>
       <div className="history-header">
-        <div><h2 className="history-title" id="history-title">Saved reports <span>{total}</span></h2><p className="history-caption">Shared research from this demo</p></div>
+        <div><p className="eyebrow">THE RESEARCH ARCHIVE</p><h2 className="history-title" id="history-title">Saved reports <span>{total}</span></h2><p className="history-caption">Shared research from this demo</p></div>
         <div className="history-filters">
           {filters.map((f) => (
             <button
@@ -415,6 +416,7 @@ export default function App() {
   const reportHeading = useRef(null);
   const requestNumber = useRef(0);
   const displayedReport = useRef(null);
+  const callDate = result?.research?.call_date || result?.daily_prices?.[0]?.date;
 
   useEffect(() => { setReportView("overview"); }, [result?.report_id]);
 
@@ -504,17 +506,19 @@ export default function App() {
 
   return <div className={`app ${result ? "has-report" : ""}`}>
     <a className="skip-link" href="#main">Skip to content</a>
+    <div className="desk-strip"><span><span className="status-dot" aria-hidden="true" /> EARNINGS RESEARCH / ON DEMAND</span><span>TRANSCRIPTS · SOURCE EVIDENCE · MARKET REACTION</span></div>
     <header className="app-header"><div className="header-inner">
-      <a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-mark" aria-hidden="true">ea.</span><span><span className="brand-name">Earnings Analyzer</span><span className="brand-caption">TRANSCRIPT RESEARCH</span></span></a>
-      <a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">View source <span aria-hidden="true">↗</span></a>
+      <a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-mark" aria-hidden="true">EA</span><span><span className="brand-name">Earnings Analyzer</span><span className="brand-caption">THE TRANSCRIPT RESEARCH DESK</span></span></a>
+      <nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()} aria-current={!result ? "page" : undefined}>Research desk</button><a href="/review.html">Quality & evaluation</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav>
     </div></header>
     <main className="main" id="main">
       <div className="search-section">
-        {!result && <><span className="eyebrow">EARNINGS RESEARCH, WITH THE SOURCE ATTACHED</span>
-        <h1 className="hero-title">Understand the quarter.<br/><span>Check the evidence.</span></h1>
-        <p className="hero-sub">A concise earnings-call brief with source passages, management guidance, and the market’s reaction.</p>
+        {!result && <><div className="hero-editorial"><div><span className="eyebrow">YOUR NEXT EARNINGS CALL, IN FOCUS</span>
+        <h1 className="hero-title">Read the quarter.<br/><span>Follow the evidence.</span></h1></div>
+        <div className="hero-margin"><p className="hero-sub">What management said. What needs scrutiny. How the market moved.</p><p>A concise AI brief with the original source attached—so you can form your own view.</p><span className="hero-edition">TRANSCRIPT RESEARCH / PUBLIC DEMO</span></div></div>
+        <div className="search-caption"><span>01 / SELECT A CALL</span><span>Company fiscal periods</span></div>
         <SearchBar onSubmit={handleSubmit} loading={loading} period={result} />
-        <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies.</p></>}
+        <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies. Saved examples below open without generating a new report.</p></>}
         {result && <details className="report-search"><summary>Analyze another call <span aria-hidden="true">＋</span></summary><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></details>}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
@@ -531,7 +535,7 @@ export default function App() {
       {result && <div className="results">
         <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
         {shareStatus === "manual" && <p className="share-fallback">Copy this link: <a href={reportUrl(window.location.href, result.report_id)}>{reportUrl(window.location.href, result.report_id)}</a></p>}
-        <div className="report-heading"><div><p className="eyebrow">EARNINGS CALL BRIEF</p><h1 ref={reportHeading} tabIndex={-1}>{result.ticker}<span>Q{result.quarter} {result.year}</span></h1></div><span className="report-status">{result.cached ? "Saved report" : "New brief saved"}</span></div>
+        <div className="report-heading"><div><p className="eyebrow">THE QUARTERLY RESEARCH FILE</p><h1 ref={reportHeading} tabIndex={-1}>{EXAMPLES.find((item) => item.ticker === result.ticker)?.name || result.ticker}<span>{result.ticker} · Q{result.quarter} FY{result.year}</span></h1></div><div className="report-heading-meta"><span className="report-status">{result.cached ? "Saved report" : "New brief saved"}</span>{callDate && <span>CALL DATE / {callDate}</span>}{result.research && <span>{result.research.findings.length} FINDINGS · {result.research.findings.filter((finding) => finding.category === "risks").length} CONCERNS</span>}</div></div>
         <nav className="workspace-tabs" role="tablist" aria-label="Report views" onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
@@ -543,10 +547,9 @@ export default function App() {
         }}>
           {(result.research ? [["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns & risks"], ["market", "Market"], ["research", "Research context"]] : [["overview", "Overview"], ["market", "Market"]]).map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}{id === "concerns" && <span>{result.research.findings.filter((finding) => finding.category === "risks").length}</span>}</button>)}
         </nav>
-        <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className={reportView === "overview" ? "report-workspace overview-workspace" : "report-workspace"}>
+        <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className="report-workspace">
           {reportView === "market" ? <MarketPanel result={result} /> : <>
-            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onUpgrade={() => handleSubmit(result, true)} /></div>
-            {reportView === "overview" && <aside className="market-sidebar"><MarketPanel result={result} compact /></aside>}
+            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onUpgrade={() => handleSubmit(result, true)} marketPanel={reportView === "overview" ? <MarketPanel result={result} compact /> : null} /></div>
           </>}
         </div>
         <p className="report-note">Source matching checks quotations and numeric consistency. AI interpretations may still be unsupported; inspect the evidence and context.</p>

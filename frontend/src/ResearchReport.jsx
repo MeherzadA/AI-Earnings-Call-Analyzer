@@ -71,24 +71,29 @@ function SourceViewer({ reportId, citation, expectedHash, onClose }) {
   </dialog>;
 }
 
-export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange }) {
+export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange, marketPanel }) {
   const [source, setSource] = useState(undefined);
   const research = result.research;
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
+  const spotlight = research?.findings[0]?.citations[0];
   const openSource = (citation = null) => setSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
     {research ? <>
       <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>
       {view === "overview" && <>
-        <section className="overview-financials" aria-labelledby="financials-title"><div className="overview-section-title"><h2 id="financials-title">Reported financials</h2><p>Q{result.quarter} FY{result.year} · Figures stated in this call</p></div><div className="financial-highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>
-        <div className="overview-section-title"><h2>AI findings</h2><p>{research.findings.length} total: {developments.length} developments and {concerns.length} concerns. The overview previews one of each.</p></div>
-        <div className="overview-stories">
-          <section className="overview-story"><p className="eyebrow">DEVELOPMENT · AI OBSERVATION</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>View all {developments.length} developments ↗</button></section>
-          <section className="overview-story overview-concern"><p className="eyebrow">CONCERN TO EXAMINE</p>{concerns[0] ? <><h2>{concerns[0].headline}</h2><p>{concerns[0].observation}</p></> : <><h2>Risk coverage is limited</h2><p>{emptyConcern}</p></>}<button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>Inspect concerns & sources ↗</button></section>
-        </div>
-        <p className="source-scope">The brief reflects what management said. Matching a quotation does not independently verify the claim. <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Compare with earlier guidance & outside context ↗</button></p>
+        <section className="overview-financials" aria-labelledby="financials-title"><div className="overview-section-title"><h2 id="financials-title">Reported financials</h2><p>Q{result.quarter} FY{result.year} · From the call transcript</p></div><div className="financial-highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>
+        <div className="overview-workspace"><div className="overview-main">
+          {spotlight && <section className="source-spotlight" aria-labelledby="spotlight-title"><div className="panel-heading"><div><p className="eyebrow">CALL / SOURCE EXCERPT</p><h2 id="spotlight-title">In the original words</h2></div><span className="panel-tag">{spotlight.passage_id}</span></div><blockquote>“{spotlight.quote}”</blockquote><div className="spotlight-footer"><span>Source excerpt matched · Not independent verification</span><button type="button" onClick={() => openSource(spotlight)}>Inspect in transcript ↗</button></div></section>}
+          <div className="overview-section-title"><h2>The key signals</h2><p>Previewing {Math.min(1, developments.length)} of {developments.length} developments and {Math.min(1, concerns.length)} of {concerns.length} concerns.</p></div>
+          <div className="overview-stories">
+            <section className="overview-story"><p className="eyebrow">KEY DEVELOPMENT / AI OBSERVATION</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>View all {developments.length} developments ↗</button></section>
+            <section className="overview-story overview-concern"><p className="eyebrow">CONCERN / WORTH EXAMINING</p>{concerns[0] ? <><h2>{concerns[0].headline}</h2><p>{concerns[0].observation}</p></> : <><h2>Risk coverage is limited</h2><p>{emptyConcern}</p></>}<button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>Inspect concerns & sources ↗</button></section>
+          </div>
+        </div><aside className="market-sidebar">{marketPanel}</aside></div>
+        <div className="context-invitation"><div><p className="eyebrow">THE NEXT QUESTION</p><h2>Did management deliver on its earlier outlook?</h2><p>Connect the preceding call’s forecast with this quarter’s reported result.</p></div><button type="button" className="outline-btn" onClick={() => onViewChange("research")}>Examine the outlook ↗</button></div>
+        <p className="source-scope">This brief reflects management’s account. A matched quotation does not independently verify the claim or establish that the AI interpretation is supported.</p>
       </>}
       {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
         <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
@@ -108,6 +113,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
     </> : <section className="legacy-report">
       <div className="legacy-notice"><div><h2>This is an earlier report</h2><p>Source checks are unavailable. A new brief can use the saved transcript; the original is retained.</p></div><button className="outline-btn" type="button" onClick={onUpgrade}>Build source-based report ↗</button></div>
       <div className="card legacy-summary"><p className="card-label">Earlier AI summary</p><p>{result.analysis.summary}</p><button type="button" className="text-btn" onClick={() => openSource()}>Read the saved transcript ↗</button></div>
+      {marketPanel && <aside className="market-sidebar">{marketPanel}</aside>}
       {[["Key claims", result.analysis.key_claims], ["Risks", result.analysis.red_flags], ["Opportunities", result.analysis.opportunities]].map(([title, items]) => <details className="legacy-list" key={title}><summary>{title} <span>{items?.length || 0}</span></summary><ul>{items?.map((item, i) => <li key={i}>{item}</li>)}</ul>{!items?.length && <p>None listed.</p>}</details>)}
     </section>}
     {source !== undefined && <SourceViewer reportId={result.report_id} citation={source} expectedHash={research?.source_hash} onClose={() => setSource(undefined)} />}
