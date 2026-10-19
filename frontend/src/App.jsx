@@ -5,14 +5,14 @@ import ResearchReport, { SourceViewer } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 
 const EXAMPLES = [
-  { ticker: "AAPL", name: "Apple", period: "Q1 FY2024", headline: "Apple’s record Services quarter, in context.", description: "Revenue, product declines, and what management expected next." },
-  { ticker: "NVDA", name: "NVIDIA", period: "Q4 FY2024", headline: "NVIDIA: growth, demand & the outlook", description: "Read the forecast alongside the reported result." },
+  { ticker: "AAPL", name: "Apple", period: "Q1 FY2024", headline: "Services at a record. iPad sales down 25%.", description: "The growth story and the pressure points in Apple’s December quarter.", facts: [["Services revenue", "$23.1B"], ["Services, year over year", "+11%"]] },
+  { ticker: "NVDA", name: "NVIDIA", period: "Q4 FY2024", headline: "NVIDIA’s $22.1B revenue quarter", description: "Reported sales and the next-quarter forecast, with the source attached." },
   { ticker: "PYPL", name: "PayPal", period: "Q4 FY2025", headline: "PayPal: payments, profit & the next quarter", description: "Inspect the claims, concerns, and original source passages." },
 ];
 
 function CompanyMark({ ticker }) {
-  const logo = { AAPL: "apple", NVDA: "nvidia", PYPL: "paypal" }[ticker];
-  return <span className="company-mark" aria-hidden="true">{logo ? <img src={`/logos/${logo}.svg`} alt="" /> : ticker.slice(0, 2)}</span>;
+  const logo = { AAPL: "apple", NVDA: "nvidia", PYPL: "paypal", MSFT: "microsoft" }[ticker];
+  return <span className="company-mark" data-company={ticker} aria-hidden="true">{logo ? <img src={`/logos/${logo}.svg`} alt="" /> : ticker.slice(0, 2)}</span>;
 }
 
 function currentQuarter(date) {
@@ -227,8 +227,8 @@ function StockPriceChart({ dailyPrices, ticker, compact = false }) {
           <Line
             type="linear"
             dataKey="price"
-            stroke="#536a83"
-            dot={{ fill: "#536a83", r: 3 }}
+            stroke="#e96018"
+            dot={{ fill: "#e96018", r: 3 }}
             activeDot={{ r: 7 }}
             isAnimationActive={false}
             name="Close Price"
@@ -236,7 +236,7 @@ function StockPriceChart({ dailyPrices, ticker, compact = false }) {
         </LineChart>
       </ResponsiveContainer>
 
-      <div className="chart-stats">
+      {!compact && <div className="chart-stats">
         <div className="stat">
           <span className="label">Call-day close</span>
           <span className="value">${chartData[0]?.price.toFixed(2)}</span>
@@ -249,7 +249,7 @@ function StockPriceChart({ dailyPrices, ticker, compact = false }) {
           <span className="label">Day 5</span>
           <span className="value">{chartData[5] ? `$${chartData[5].price.toFixed(2)}` : "Pending"}</span>
         </div>
-      </div>
+      </div>}
       <details className="price-details"><summary>View daily prices <span>Source: Yahoo Finance</span></summary><table><caption className="sr-only">{ticker} closing prices around the earnings call</caption><thead><tr><th scope="col">Session</th><th scope="col">Date</th><th scope="col">Close (USD)</th></tr></thead><tbody>{dailyPrices.map((item) => <tr key={item.date}><th scope="row">{item.label}</th><td>{item.date}</td><td>${item.price.toFixed(2)}</td></tr>)}</tbody></table></details>
     </div>
   );
@@ -270,10 +270,10 @@ function MarketPanel({ result, compact = false }) {
 
 function ExampleFeed({ onSelect }) {
   return <section className="examples-section" aria-labelledby="examples-title">
-    <div className="home-section-heading"><h2 id="examples-title">Featured calls</h2><span>Saved reports · No new AI generation</span></div>
-    <div className="example-grid">{EXAMPLES.map((card) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
-        <span className="example-top"><span className="example-issuer"><CompanyMark ticker={card.ticker} /><span>{card.name}<small>{card.ticker} · {card.period}</small></span></span><span aria-hidden="true">↗</span></span>
-        <h3>{card.headline}</h3><p>{card.description}</p><span className="example-action">Read the brief <span aria-hidden="true">→</span></span>
+    <div className="home-section-heading"><h2 id="examples-title">On the desk</h2><span>Curated calls / No new AI generation</span></div>
+    <div className="example-grid">{EXAMPLES.map((card, index) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
+        <span className="example-top"><span className="example-issuer"><CompanyMark ticker={card.ticker} /><span>{card.name}<small>{card.ticker} · {card.period}</small></span></span><span className="example-file">FILE / {String(index + 1).padStart(2, "0")}</span></span>
+        <h3>{card.headline}</h3><p>{card.description}</p>{card.facts && <div className="example-facts">{card.facts.map(([label, value]) => <span key={label}><small>{label}</small><strong>{value}</strong></span>)}<small className="example-facts-note">Company-reported on this call</small></div>}<span className="example-action">Open call brief <span aria-hidden="true">↗</span></span>
       </button>)}</div>
   </section>;
 }
@@ -289,7 +289,7 @@ function SavedMarketTape({ calls, loading, onSelect }) {
 
 function CallMovers({ calls, loading, onSelect }) {
   const scale = Math.max(1, ...calls.map((call) => Math.abs(call.return_1day)));
-  return <section className="call-movers" aria-labelledby="movers-title"><div className="home-section-heading"><h2 id="movers-title">Post-call moves</h2><span>1 trading day</span></div><p>How shares moved after these saved calls.</p>
+  return <section className="call-movers" aria-labelledby="movers-title"><div className="home-section-heading"><h2 id="movers-title">Stock reaction</h2><span>1 trading day</span></div><p>Call-day close → next trading-day close</p>
     <div className="movers-rows">{calls.map((call) => <button type="button" key={call.report_id} className="mover-row" onClick={() => onSelect(call)}><span className="mover-issuer"><strong>{call.ticker}</strong><small>Q{call.quarter} FY{call.year}</small></span><span className="mover-plot" aria-hidden="true"><span style={{ width: `${Math.abs(call.return_1day) / scale * 50}%`, left: call.return_1day < 0 ? "auto" : "50%", right: call.return_1day < 0 ? "50%" : "auto" }} className={call.return_1day < 0 ? "mover-negative" : "mover-positive"} /></span><strong className={call.return_1day < 0 ? "loss" : "gain"}>{marketReturn(call.return_1day)}</strong></button>)}{!calls.length && <p className="movers-empty">{loading ? "Loading the saved market data…" : "No saved stock reactions available."}</p>}</div>
     <p className="movers-note">Historical returns from the call-day close. These are not live quotes, and a move alone does not establish its cause.</p>
   </section>;
@@ -363,9 +363,9 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
                     className="history-return"
                     style={{
                       color: positiveReturn
-                        ? "#16a34a"
+                        ? "var(--green)"
                         : negativeReturn
-                        ? "#dc2626"
+                        ? "var(--critical)"
                         : "#6b7280",
                     }}
                   >
@@ -381,9 +381,9 @@ function HistoryFeed({ history, onSelect, sort, setSort, limit, setLimit, total,
                     style={{
                       color:
                         item.return_5day > 0
-                          ? "#16a34a"
+                          ? "var(--green)"
                           : item.return_5day < 0
-                          ? "#dc2626"
+                          ? "var(--critical)"
                           : "#6b7280",
                     }}
                   >
@@ -430,11 +430,11 @@ export default function App() {
   const [shareStatus, setShareStatus] = useState("");
   const [reportView, setReportView] = useState("overview");
   const [source, setSource] = useState(undefined);
+  const [playback, setPlayback] = useState(null);
   const reportHeading = useRef(null);
   const requestNumber = useRef(0);
   const displayedReport = useRef(null);
   const callDate = result?.research?.call_date || result?.daily_prices?.[0]?.date;
-  const concernCount = result?.research?.findings.filter((finding) => finding.category === "risks").length || 0;
   const marketCalls = useMemo(() => {
     const seen = new Set();
     return history.filter((item) => {
@@ -444,6 +444,7 @@ export default function App() {
   }, [history]);
 
   useEffect(() => { setReportView("overview"); setSource(undefined); }, [result?.report_id]);
+  useEffect(() => { if (reportView !== "overview") setPlayback(null); }, [reportView]);
 
   useEffect(() => {
     document.title = result ? `${result.ticker} Q${result.quarter} ${result.year} · Earnings Analyzer` : "Earnings Analyzer";
@@ -536,12 +537,12 @@ export default function App() {
       <nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()} aria-current={!result ? "page" : undefined}>Research desk</button><a href="/review.html">Quality & evaluation</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav>
     </div></header>
     <main className="main" id="main">
-      {!result && <><div className="home-masthead"><div><p className="eyebrow">COMPANIES / EARNINGS / EVIDENCE</p><h1>Earnings desk<span>.</span></h1></div><p>Read the quarter. Hear the call.<br/>Check what backs it up.</p></div><SavedMarketTape calls={marketCalls} loading={historyLoading} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} /></>}
+      {!result && <><div className="home-masthead"><div><p className="eyebrow">THE QUARTER. ON RECORD.</p><h1>EARNINGS DESK<span>_</span></h1></div><p><strong>{historyLoading ? "—" : total}</strong> SAVED CALLS<br/><span>PUBLIC RESEARCH ARCHIVE</span></p></div><SavedMarketTape calls={marketCalls} loading={historyLoading} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} /></>}
       <div className="search-section">
         {!result && <><div className="search-caption"><span>RESEARCH A COMPANY</span><span>Company fiscal periods</span></div>
         <SearchBar onSubmit={handleSubmit} loading={loading} period={result} />
         <p className="period-help">Choose a ticker and fiscal period, or open a saved call below. Transcript coverage varies.</p></>}
-        {result && <div className="report-search"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></div>}
+        {result && <details className="report-search"><summary>Analyze another company or quarter</summary><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></details>}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
       {!result && !loading && <>
@@ -555,9 +556,9 @@ export default function App() {
         {loading === "saved" && <button type="button" className="text-btn" onClick={() => goHome()}>Back to examples</button>}
       </div>}
       {result && <div className="results">
-        <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
+        <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><div className="report-utilities"><button type="button" className="full-transcript-btn" onClick={() => setSource(null)}>▤ Full transcript</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Share report ↗"}</button></div></div>
         {shareStatus === "manual" && <p className="share-fallback">Copy this link: <a href={reportUrl(window.location.href, result.report_id)}>{reportUrl(window.location.href, result.report_id)}</a></p>}
-        <div className="report-heading"><div className="company-heading"><CompanyMark ticker={result.ticker} /><div><p className="eyebrow">{result.ticker} / Q{result.quarter} FY{result.year}</p><h1 ref={reportHeading} tabIndex={-1}>{EXAMPLES.find((item) => item.ticker === result.ticker)?.name || result.ticker}</h1><p className="company-call-date">{callDate ? `Call held ${callDate}` : "Saved report"}</p></div></div>{result.research && <section className="financial-highlights" aria-label="Reported financials; select a metric to inspect its source">{result.research.financial_highlights.map((metric) => <button type="button" className="financial-highlight" key={metric.id} onClick={() => setSource(metric.citations[0])} aria-label={`${metric.label}: ${metric.value}. Inspect source`}><span>{metric.label}</span><strong className="financial-value">{metric.value}</strong><span className="metric-source" aria-hidden="true">↗</span></button>)}</section>}</div>
+        <div className="report-heading"><div className="company-heading"><CompanyMark ticker={result.ticker} /><div><p className="eyebrow">{result.ticker} / Q{result.quarter} FY{result.year}</p><h1 ref={reportHeading} tabIndex={-1}>{EXAMPLES.find((item) => item.ticker === result.ticker)?.name || result.ticker}</h1><p className="company-call-date">{callDate ? `Call held ${callDate}` : "Saved report"}</p></div></div>{result.research && <section className="financial-highlights" aria-label="Reported financials; select a metric to inspect its source">{result.research.financial_highlights.slice(0, 2).map((metric) => <button type="button" className="financial-highlight" key={metric.id} onClick={() => setSource(metric.citations[0])} aria-label={`${metric.label}: ${metric.value}. Inspect source`}><span>{metric.label}</span><strong className="financial-value">{metric.value}</strong><span className="metric-source" aria-hidden="true">↗</span></button>)}</section>}</div>
         <nav className="workspace-tabs" role="tablist" aria-label="Report views" onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
@@ -567,15 +568,15 @@ export default function App() {
           const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
           tabs[next].focus(); tabs[next].click();
         }}>
-          {(result.research ? [["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns & risks"], ["market", "Market"], ["research", "Research context"]] : [["overview", "Overview"], ["market", "Market"]]).map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}{id === "concerns" && <span>{concernCount}</span>}</button>)}
+          {(result.research ? [["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns & risks"], ["market", "Market"], ["research", "Research context"]] : [["overview", "Overview"], ["market", "Market"]]).map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}</button>)}
         </nav>
         <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className="report-workspace">
           {reportView === "market" ? <MarketPanel result={result} /> : <>
-            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onSource={setSource} onUpgrade={() => handleSubmit(result, true)} marketPanel={reportView === "overview" ? <MarketPanel result={result} compact /> : null} /></div>
+            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onSource={setSource} onPlayback={setPlayback} onUpgrade={() => handleSubmit(result, true)} marketPanel={reportView === "overview" ? <MarketPanel result={result} compact /> : null} /></div>
           </>}
         </div>
       </div>}
-      {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} onClose={() => setSource(undefined)} />}
+      {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} playback={playback} onClose={() => setSource(undefined)} />}
     </main>
     <footer className="app-footer"><span>Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">defeatbeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span><a href="https://meherzad.tech" target="_blank" rel="noreferrer">Built by Meherzad Antia ↗</a></footer>
   </div>;

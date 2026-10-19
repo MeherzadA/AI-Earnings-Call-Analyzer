@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import { speechSections } from "./audio.js";
 
-export default function TranscriptReader({ result, reason, onRecording }) {
+export default function TranscriptReader({ result, reason, onRecording, onPlayback, onTranscript }) {
   const [status, setStatus] = useState("idle");
   const [sections, setSections] = useState([]);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState("");
+  const [cursor, setCursor] = useState(null);
   const session = useRef(0);
   const mounted = useRef(true);
   const rate = useRef(1);
@@ -26,6 +27,14 @@ export default function TranscriptReader({ result, reason, onRecording }) {
     return () => { mounted.current = false; stop(); };
   }, []);
 
+  useEffect(() => {
+    const section = sections[index];
+    onPlayback?.({ mode: "reader", playing: status === "speaking", ready: supported, loading: status === "loading",
+      passageId: section?.passageId, start: section ? section.start + (cursor?.start || 0) : 0,
+      end: section ? section.start + (cursor?.end ?? section.text.length) : 0,
+      word: Boolean(cursor), toggle });
+  }, [status, sections, index, cursor, onPlayback]);
+
   function speak(items, at) {
     stop();
     const token = session.current;
@@ -36,7 +45,13 @@ export default function TranscriptReader({ result, reason, onRecording }) {
     const voice = voices.find((item) => item.localService && item.lang.startsWith("en")) || voices.find((item) => item.lang.startsWith("en"));
     if (voice) speech.voice = voice;
     utterance.current = speech;
-    setIndex(at); setStatus("loading"); setError("");
+    setIndex(at); setCursor(null); setStatus("loading"); setError("");
+    speech.onboundary = (event) => {
+      if (token !== session.current || event.name !== "word") return;
+      const start = event.charIndex;
+      const length = event.charLength || items[at].text.slice(start).match(/^\S+/)?.[0].length || 1;
+      setCursor({ start, end: Math.min(items[at].text.length, start + length) });
+    };
     speech.onstart = () => {
       if (token !== session.current) return;
       clearTimeout(startTimer.current); setStatus("speaking");
@@ -86,12 +101,12 @@ export default function TranscriptReader({ result, reason, onRecording }) {
   function jump(at) {
     const next = Math.max(0, Math.min(sections.length - 1, at));
     const resume = status === "speaking";
-    stop(); setIndex(next); setStatus("idle");
+    stop(); setIndex(next); setCursor(null); setStatus("idle");
     if (resume) speak(sections, next);
   }
 
   return <div className="call-replay transcript-reader">
-    <p className="reader-disclosure"><strong>Transcript read-aloud</strong> · Computer voice<br/>{reason || "The original recording isn’t available from our connected source."} This reads the saved transcript, not the executives’ voices.</p>
+    <p className="reader-disclosure"><strong>Computer-read transcript</strong> · Not the executives’ voices. <span>{reason || "No original recording from our connected source."}</span></p>
     {supported ? <div className={`audio-player ${status === "speaking" ? "reader-playing" : ""}`}>
       <div className="audio-status"><span>{status === "loading" ? "Preparing read-aloud…" : status === "speaking" ? "Reading the transcript" : status === "paused" ? "Read-aloud paused" : status === "ended" ? "Transcript finished" : "Listen to the saved transcript"}</span><span>{sections[index]?.passageId || `Q${result.quarter} FY${result.year}`}</span></div>
       <div className="reader-activity" aria-hidden="true">{Array.from({ length: 36 }, (_, i) => <i key={i} style={{ "--bar": `${10 + (i * 17 % 39)}px`, "--delay": `${i * -0.07}s` }} />)}</div>
@@ -107,6 +122,7 @@ export default function TranscriptReader({ result, reason, onRecording }) {
       </div>
     </div> : <p className="audio-error">This browser has no speech read-aloud support. The transcript remains available to read.</p>}
     {error && <p className="audio-error" role="alert">{error}</p>}
-    <p className="replay-credit">Uses your browser’s speech voice. The animation indicates reading activity, not measured audio. {onRecording && <button type="button" onClick={onRecording}>Try original recording ↗</button>}</p>
+    <div className="player-footer"><button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript & follow along →</button>{onRecording && <button type="button" className="text-btn" onClick={onRecording}>Try original recording</button>}</div>
+    <p className="replay-credit">Browser voice · Animation indicates reading activity. Transcript highlighting follows the spoken section; word tracking depends on your browser.</p>
   </div>;
 }

@@ -15,15 +15,17 @@ export function audioTime(seconds) {
 export function speechSections(passages) {
   return passages.flatMap((passage) => {
     const sections = [];
-    let text = "";
-    for (const word of passage.text.split(/\s+/).filter(Boolean)) {
-      if (text && text.length + word.length + 1 > 240) {
-        sections.push({ text, passageId: passage.id });
-        text = "";
+    let start = null;
+    let end = 0;
+    for (const word of passage.text.matchAll(/\S+/g)) {
+      if (start !== null && word.index + word[0].length - start > 240) {
+        sections.push({ text: passage.text.slice(start, end), passageId: passage.id, start, end });
+        start = null;
       }
-      text += `${text ? " " : ""}${word}`;
+      if (start === null) start = word.index;
+      end = word.index + word[0].length;
     }
-    if (text) sections.push({ text, passageId: passage.id });
+    if (start !== null) sections.push({ text: passage.text.slice(start, end), passageId: passage.id, start, end });
     return sections;
   });
 }

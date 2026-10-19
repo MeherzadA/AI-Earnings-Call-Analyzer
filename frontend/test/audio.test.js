@@ -19,4 +19,8 @@ test("read-aloud preserves transcript words and passage identity in short sectio
   assert.ok(sections.length > 1);
   assert.ok(sections.every((item) => item.text.length <= 240 && item.passageId === "P4"));
   assert.equal(sections.map((item) => item.text).join(" "), text);
+  const spaced = " 🎧 Sales\n increased  10%. ".repeat(18);
+  const tracked = speechSections([{ id: "P6", text: spaced }]);
+  assert.ok(tracked.every((item) => spaced.slice(item.start, item.end) === item.text));
+  assert.ok(tracked.every((item, index) => index === 0 || item.start >= tracked[index - 1].end));
 });
