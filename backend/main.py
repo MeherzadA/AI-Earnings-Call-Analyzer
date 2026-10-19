@@ -147,6 +147,25 @@ def read_report(report_id: int, db: Session = Depends(get_db)):
     return report_response(*report_by_id(db, report_id))
 
 
+@app.post("/reports/{report_id}/prices")
+def load_prices(report_id: int, db: Session = Depends(get_db)):
+    transcript, analysis = report_by_id(db, report_id)
+    current = report_response(transcript, analysis)
+    if len(current["daily_prices"]) >= 22:
+        return current
+    if not current["call_date"]:
+        raise HTTPException(status_code=503, detail="The call date is unavailable; a longer price window cannot be established.")
+    prices = get_stock_returns(transcript.ticker, transcript.year, int(transcript.quarter), earnings_date=current["call_date"])
+    if not prices.get("daily_prices"):
+        raise HTTPException(status_code=503, detail="The price provider could not load the longer window. The stored five-day chart is still available.")
+    if len(prices["daily_prices"]) >= len(current["daily_prices"]):
+        analysis.daily_prices = json.dumps(prices["daily_prices"])
+        analysis.return_1day = prices.get("return_1day")
+        analysis.return_5day = prices.get("return_5day")
+        db.commit()
+    return report_response(transcript, analysis)
+
+
 @app.get("/reports/{report_id}/transcript")
 def read_transcript(report_id: int, db: Session = Depends(get_db)):
     transcript, analysis = report_by_id(db, report_id)
