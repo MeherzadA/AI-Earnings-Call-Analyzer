@@ -6,7 +6,7 @@ and post-earnings stock price reaction.
 
 The new report format prioritizes up to six findings with separate AI observations and interpretations, inspectable transcript excerpts, financial highlights, and saved report links. It uses one Gemini call per uncached analysis, followed by local source checks.
 
-The report opens in a dashboard with the brief and market chart side by side on desktop. Overview, Findings, Concerns, Market and Research context are stateful views, so changing views does not reload the report. An empty concerns view explicitly does not mean there are no risks.
+The report opens in an editorial research workspace: financial figures across the top, a matched transcript quotation beside the market chart on desktop, and distinct development and concern panels. Overview, Findings, Concerns, Market and Research context are stateful views, so changing views does not reload the report. On narrow screens the market panel moves ahead of the longer narrative. An empty concerns view explicitly does not mean there are no risks. The analysis uses transcripts; acoustic or vocal-stress signals are not assessed.
 
 The business brief uses the call transcript. Optional Research context fetches and caches the preceding call, a conservative prior revenue-outlook comparison, dated headline links and SEC data when reachable. It makes no additional Gemini call. Ambiguous periods and segment/total mismatches are left unscored; headline metadata is not verified article content. Automated SEC access returned HTTP 403 during development, so the app shows an unavailable state and direct filing links rather than claiming a successful check. Read [research context scope and limitations](docs/research-context.md).
 
@@ -19,7 +19,7 @@ Prompt `evidence-brief-3` asks for critical reading of management remarks and an
 
 ![Report workspace preview](docs/images/report-workspace.png)
 
-*Workspace preview using the existing saved Microsoft analysis; the market chart stays beside the brief on desktop.*
+*Workspace preview using the existing saved Apple Q1 FY2024 report; no new analysis was generated for the redesign.*
 
 ## What it does
 
