@@ -285,6 +285,28 @@ p, h1, h2, h3 { margin: 0; }
 .findings-grid .finding-columns { grid-template-columns: 1fr; gap: 16px; }
 .findings-grid .finding-interpretation { border-left: 0; border-top: 1px solid var(--border); padding: 16px 0 0; }
 .research-context { display: flex; flex-direction: column; gap: 20px; }
+.overview-financials { display: flex; flex-direction: column; gap: 16px; }
+.overview-section-title { border-top: 2px solid var(--border-strong); padding-top: 18px; }
+.overview-section-title h2 { font: 600 20px/1.4 var(--font); letter-spacing: -.5px; }
+.overview-section-title p { font-size: 12px; color: var(--ink-3); line-height: 1.8; margin-top: 6px; }
+.comparison-values .previous-value { background: #edf3fa; border-color: #b9ccdf; border-left: 4px solid #567a9a; }
+.comparison-values .current-value { background: #f0f5eb; border-color: #bccdb1; border-left: 4px solid var(--accent); }
+.comparison-values h4 { margin: 8px 0 16px; font-size: 14px; }
+.comparison-values p { font-size: 12px; color: var(--ink-2); line-height: 1.8; margin-top: 12px; }
+.outlook-quote { padding: 20px; margin-top: 14px; border: 1px solid #c8d5e0; border-radius: 10px; background: #f7fafd; }
+.outlook-quote > blockquote { font: 16px/1.8 Georgia, serif; margin: 14px 0; }
+.outlook-quote .context-source-label { font: 10px/1.8 var(--font-mono); color: #496c89; }
+.outlook-quote .prior-outlook { border: 0; border-top: 1px solid #c8d5e0; border-radius: 0; padding: 0; }
+.outlook-quote .prior-outlook summary { font: 12px/1.7 var(--font); min-height: 44px; color: #345a79; }
+.outlook-quote .prior-outlook blockquote { color: var(--ink-3); font: 13px/1.9 var(--font); }
+.outlook-quote mark { background: #f7e697; color: var(--ink); padding: 2px 0; }
+.filing-unavailable { border-block: 1px solid var(--border); padding: 0 16px; color: var(--ink-3); }
+.filing-unavailable summary { cursor: pointer; padding: 15px 0; min-height: 44px; font-size: 12px; }
+.filing-unavailable p, .filing-unavailable a { font-size: 12px; line-height: 1.8; margin-bottom: 16px; display: block; }
+.external-context-grid > :only-child { grid-column: 1 / -1; }
+.coverage-card .news-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.coverage-card .news-list li { border: 1px solid var(--border); border-radius: 9px; padding: 18px; background: var(--bg); }
+@media (max-width: 600px) { .coverage-card .news-list { grid-template-columns: 1fr; } }
 .context-load { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .context-load p, .context-card > p { font-size: 13px; line-height: 1.85; color: var(--ink-2); max-width: 850px; }
 .context-stamp { color: var(--ink-3); font: 10px/1.8 var(--font-mono); }

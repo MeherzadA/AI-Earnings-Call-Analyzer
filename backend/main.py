@@ -39,7 +39,7 @@ from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
-from context import build_context
+from context import build_context, CONTEXT_VERSION
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -136,14 +136,14 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
     research = report_response(transcript, analysis)["research"]
     if not research:
         raise HTTPException(status_code=409, detail="Build a source-based report before loading comparison context.")
-    if research.get("context"):
+    if research.get("context", {}).get("version") == CONTEXT_VERSION:
         return {"context": research["context"], "cached": True}
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
     try:
         db.refresh(analysis)
         research = json.loads(analysis.research_json)
-        if research.get("context"):
+        if research.get("context", {}).get("version") == CONTEXT_VERSION:
             return {"context": research["context"], "cached": True}
         previous_year, previous_quarter = (transcript.year, int(transcript.quarter) - 1) if int(transcript.quarter) > 1 else (transcript.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
