@@ -9,7 +9,7 @@
 .comparison-workspace .diff-file-heading { background:#f2f0f7; padding:16px 22px; color:#493e61; }
 .comparison-workspace .diff-file-heading strong { font:750 17px var(--display); }
 .comparison-workspace .forecast-side > header { background:#a3441e; border:0; position:relative; }
-.comparison-workspace .actual-side > header { background:#493499; border:0; }
+.comparison-workspace .diff-columns .actual-side > header { background:#493499; border:0; }
 .comparison-workspace .diff-columns > article + article { border-left:3px solid white; }
 .comparison-workspace .diff-step { display:flex; align-items:center; flex-wrap:wrap; gap:9px 18px; color:white; }
 .diff-step b { font:800 36px/1.1 var(--display); letter-spacing:1px; }
