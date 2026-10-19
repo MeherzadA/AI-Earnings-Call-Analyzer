@@ -282,7 +282,6 @@
 .diff-columns header { padding:19px 21px; background:#fff7e6; border-bottom:1px solid #e7d8b7; }
 .diff-columns .actual-side header { background:#eaf3ff; border-color:#c8daf2; }
 .diff-step { font:600 12px/1.5 var(--font-mono); letter-spacing:.7px; color:#845b16; }
-.actual-side .diff-step { color:#23558f; }
 .diff-columns h4 { font:750 20px/1.5 var(--display); margin:9px 0 5px; color:#1b334e; }
 .diff-columns header p { font-size:13px; line-height:1.8; color:#5e6e83; }
 .diff-value { padding:22px 21px; min-height:125px; border-bottom:1px solid #e5eaf1; }
