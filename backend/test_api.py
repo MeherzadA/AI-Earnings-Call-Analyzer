@@ -28,12 +28,16 @@ from test_research import SOURCE, DRAFT
 RESEARCH = check_research(ResearchDraft.model_validate(DRAFT), SOURCE, 2024, "test-model")
 REPORT = {**legacy_analysis(RESEARCH), "research": RESEARCH}
 LEGACY = legacy_analysis(RESEARCH)
+CONTEXT = {"version": main.CONTEXT_VERSION, "call_date": "2024-02-01",
+           "previous_call": {"status": "available"}, "news": {"status": "empty"}, "filings": {"status": "empty"}}
 
 
 class AnalysisFlowTests(unittest.TestCase):
     def setUp(self):
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
+        self.context = patch.object(main, "build_context", return_value=CONTEXT).start()
+        self.addCleanup(patch.stopall)
         self.client = TestClient(main.app)
 
     def tearDown(self):
@@ -49,7 +53,9 @@ class AnalysisFlowTests(unittest.TestCase):
             repeated = self.client.post("/analyze", json={"ticker": "AAPL", "year": 2024, "quarter": 1})
             self.assertTrue(repeated.json()["cached"])
             self.assertEqual(repeated.json()["analysis"], LEGACY)
-            self.assertEqual(repeated.json()["research"], RESEARCH)
+            self.assertEqual(repeated.json()["research"], response.json()["research"])
+            self.assertEqual(response.json()["context"], CONTEXT)
+            self.context.assert_called_once()
             self.assertEqual(transcript.call_count, 1)
             self.assertEqual(ai.call_count, 1)
             history = self.client.get("/history").json()
@@ -77,16 +83,33 @@ class AnalysisFlowTests(unittest.TestCase):
     def test_context_is_cached_without_another_model_call(self):
         with patch.object(main, "fetch_transcript", return_value={"content": SOURCE}), patch.object(main, "analyze_transcript", return_value=REPORT), patch.object(main, "get_stock_returns", return_value={}):
             report = self.client.post("/analyze", json={"ticker": "AAPL", "year": 2024, "quarter": 1}).json()
-        with patch.object(main, "build_context", return_value={"call_date": "2024-02-01", "version": main.CONTEXT_VERSION}) as context, patch.object(main, "analyze_transcript") as ai:
+        with patch.object(main, "build_context", return_value=CONTEXT) as context, patch.object(main, "analyze_transcript") as ai:
             first = self.client.post(f"/reports/{report['report_id']}/context").json()
             second = self.client.post(f"/reports/{report['report_id']}/context").json()
-            self.assertFalse(first["cached"])
+            self.assertTrue(first["cached"])
             self.assertTrue(second["cached"])
-            context.assert_called_once()
+            context.assert_not_called()
             ai.assert_not_called()
             reopened = self.client.get(f"/reports/{report['report_id']}").json()
             self.assertEqual(reopened["research"]["context"], first["context"])
             self.assertEqual(reopened["analysis"], report["analysis"])
+
+    def test_failed_research_retries_without_repeating_ai(self):
+        failed = {**CONTEXT, "news": {"status": "unavailable"}}
+        self.context.side_effect = [RuntimeError("Date lookup temporarily failed"), failed, CONTEXT]
+        with patch.object(main, "fetch_transcript", return_value={"content": SOURCE}), patch.object(main, "analyze_transcript", return_value=REPORT) as ai, patch.object(main, "get_stock_returns", return_value={}):
+            request = {"ticker": "AAPL", "year": 2024, "quarter": 1}
+            first = self.client.post("/analyze", json=request)
+            self.assertEqual(first.status_code, 200, first.text)
+            self.assertIsNone(first.json()["context"])
+            second = self.client.post("/analyze", json=request).json()
+            self.assertEqual(second["context"], failed)
+            retried = self.client.post(f"/reports/{second['report_id']}/context").json()
+            self.assertEqual(retried["context"], CONTEXT)
+            self.assertFalse(retried["cached"])
+            self.assertTrue(self.client.post(f"/reports/{second['report_id']}/context").json()["cached"])
+            ai.assert_called_once()
+            self.assertEqual(self.context.call_count, 3)
 
     def test_older_report_loads_context_without_upgrading_or_calling_ai(self):
         with database.SessionLocal() as db:
@@ -94,7 +117,7 @@ class AnalysisFlowTests(unittest.TestCase):
             db.add(transcript); db.flush()
             db.add(main.models.Analysis(transcript_id=transcript.id, summary="Keep original", key_claims="[]", red_flags="[]", opportunities="[]", daily_prices=json.dumps([{"date":"2023-02-22","price":20.73}])))
             db.commit()
-        context = {"version": main.CONTEXT_VERSION, "call_date":"2023-02-22"}
+        context = {**CONTEXT, "call_date":"2023-02-22"}
         with patch.object(main, "build_context", return_value=context) as provider, patch.object(main, "analyze_transcript") as ai:
             self.assertEqual(self.client.post("/reports/1/context").status_code, 200)
             self.assertTrue(self.client.post("/reports/1/context").json()["cached"])

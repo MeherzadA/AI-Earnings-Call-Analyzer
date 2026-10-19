@@ -17,6 +17,13 @@ NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal
 CONTEXT_VERSION = 4
 
 
+def context_complete(context):
+    return context.get("version") == CONTEXT_VERSION and all(
+        context.get(section, {}).get("status") in ("available", "empty")
+        for section in ("previous_call", "news", "filings")
+    )
+
+
 def download(url, *, params=None, limit=8_000_000):
     with requests.get(url, params=params, headers={"User-Agent": USER_AGENT}, timeout=(5, 10), stream=True) as response:
         if not response.ok:
@@ -204,6 +211,8 @@ def filing_context(ticker, call_date, year, quarter):
     import json
     link = f"https://www.sec.gov/edgar/browse/?CIK={ticker}&owner=exclude"
     tickers, error = sec_tickers()
+    if error:
+        sec_tickers.cache_clear()  # Retry provider failures; retain successful issuer maps.
     base = {"browse_url": link, "cutoff": call_date, "facts": []}
     if error or ticker not in tickers:
         return {**base, "status": "unavailable", "message": error or "No SEC issuer mapping found. No filing figures were checked."}
@@ -256,7 +265,7 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
     sections = {}
     cached = research.get("context", {})
     for name, provider in (("news", lambda: dated_news(ticker, call_date)), ("filings", lambda: filing_context(ticker, call_date, year, quarter))):
-        if cached.get("call_date") == call_date and cached.get(name):
+        if cached.get("call_date") == call_date and cached.get(name, {}).get("status") in ("available", "empty"):
             sections[name] = cached[name]
             continue
         try:

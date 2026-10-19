@@ -1,6 +1,6 @@
 # Research context
 
-The core business brief is still generated from one call transcript, with one Gemini call. Opening Research context loads it automatically once; no second load button is required. `POST /reports/{id}/context` stores a snapshot inside the existing `research_json` field. Reopening a current cached context does not refetch sources or generate another analysis. Original report fields remain intact; no schema migration or paid service is required.
+The core business brief is generated from one call transcript, with one Gemini call. Every new analysis also attempts prior-call, filing and dated-coverage research before returning. A context-provider failure preserves the completed analysis, so a retry does not spend another Gemini call. `POST /reports/{id}/context` stores a snapshot inside the existing `research_json` field. Current successful or empty source responses stay cached. Unavailable sources retry once when opening Research, or with **Retry unavailable sources**; failures are not permanently cached as completed research. Opening an older report can use the same loader without regenerating its AI statements. External data availability cannot be guaranteed, and missing evidence is never invented. Original report fields remain intact; no schema migration or paid service is required.
 
 ## Previous guidance and reported results
 
