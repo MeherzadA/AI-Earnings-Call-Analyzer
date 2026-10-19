@@ -74,9 +74,13 @@ function SourceViewer({ reportId, citation, expectedHash, onClose }) {
 export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange, marketPanel }) {
   const [source, setSource] = useState(undefined);
   const research = result.research;
+  const [comparisonContext, setComparisonContext] = useState(research?.context?.version === 3 ? research.context : null);
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
   const spotlight = research?.findings[0]?.citations[0];
+  const comparison = comparisonContext?.comparison;
+  const targetPeriod = `Q${result.quarter} FY${result.year}`;
+  const baselinePeriod = `Q${result.quarter} FY${result.year - 1}`;
   const openSource = (citation = null) => setSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
@@ -84,15 +88,16 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
       <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>
       {view === "overview" && <>
         <section className="overview-financials" aria-labelledby="financials-title"><div className="overview-section-title"><h2 id="financials-title">Reported financials</h2><p>Q{result.quarter} FY{result.year} · From the call transcript</p></div><div className="financial-highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>
-        <div className="overview-workspace"><div className="overview-main">
-          {spotlight && <section className="source-spotlight" aria-labelledby="spotlight-title"><div className="panel-heading"><div><p className="eyebrow">CALL / SOURCE EXCERPT</p><h2 id="spotlight-title">In the original words</h2></div><span className="panel-tag">{spotlight.passage_id}</span></div><blockquote>“{spotlight.quote}”</blockquote><div className="spotlight-footer"><span>Source excerpt matched · Not independent verification</span><button type="button" onClick={() => openSource(spotlight)}>Inspect in transcript ↗</button></div></section>}
-          <div className="overview-section-title"><h2>The key signals</h2><p>Previewing {Math.min(1, developments.length)} of {developments.length} developments and {Math.min(1, concerns.length)} of {concerns.length} concerns.</p></div>
-          <div className="overview-stories">
-            <section className="overview-story"><p className="eyebrow">KEY DEVELOPMENT / AI OBSERVATION</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>View all {developments.length} developments ↗</button></section>
-            <section className="overview-story overview-concern"><p className="eyebrow">CONCERN / WORTH EXAMINING</p>{concerns[0] ? <><h2>{concerns[0].headline}</h2><p>{concerns[0].observation}</p></> : <><h2>Risk coverage is limited</h2><p>{emptyConcern}</p></>}<button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>Inspect concerns & sources ↗</button></section>
-          </div>
-        </div><aside className="market-sidebar">{marketPanel}</aside></div>
-        <div className="context-invitation"><div><p className="eyebrow">THE NEXT QUESTION</p><h2>Did management deliver on its earlier outlook?</h2><p>Connect the preceding call’s forecast with this quarter’s reported result.</p></div><button type="button" className="outline-btn" onClick={() => onViewChange("research")}>Examine the outlook ↗</button></div>
+        <div className="console-grid"><div className="console-column">
+          <aside className="market-sidebar">{marketPanel}</aside>
+          <section className="guidance-ledger" aria-labelledby="guidance-ledger-title"><div className="panel-heading"><div><p className="eyebrow">EARLIER EXPECTATION / REPORTED OUTCOME</p><h2 id="guidance-ledger-title">Management outlook ledger</h2></div><span className="panel-tag">{targetPeriod}</span></div>
+            {comparison?.outlook ? <><p className="ledger-period">Forecast issued in Q{comparisonContext.previous_call.quarter} FY{comparisonContext.previous_call.year}, for {targetPeriod}.</p><div className="ledger-table-wrap"><table className="guidance-table"><caption className="sr-only">Earlier management forecast and actual total revenue for {targetPeriod}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Expected {targetPeriod}</th><th scope="col">Reported {targetPeriod}</th></tr></thead><tbody><tr><th scope="row">Total revenue</th><td>{comparison.status === "directional" ? `Broadly unchanged vs ${baselinePeriod}` : comparison.expected}</td><td><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <small>{comparison.actual_change.replace("year over year", `vs ${baselinePeriod}`)}</small>}</td></tr></tbody></table></div><div className="ledger-verdict"><span>{comparison.status === "directional" ? "DIRECTION ONLY" : "STATED-VALUE COMPARISON"}</span><p>{comparison.takeaway}</p></div></> : <div className="ledger-empty"><h3>What was promised for this quarter?</h3><p>{comparison?.message || "Open the preceding call’s revenue outlook and compare it with this quarter’s reported result. The comparison is loaded once and saved."}</p></div>}
+            <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Open comparison & source evidence ↗</button>
+          </section>
+          </div><div className="console-column">
+          {spotlight && <section className="source-spotlight" aria-labelledby="spotlight-title"><div className="panel-heading"><div><p className="eyebrow">TRANSCRIPT / ORIGINAL EVIDENCE</p><h2 id="spotlight-title">Source spotlight</h2></div><span className="panel-tag">{spotlight.passage_id}</span></div><blockquote>“{spotlight.quote}”</blockquote><div className="quote-readout"><h3>AI observation</h3><p>{research.findings[0].observation}</p></div><div className="spotlight-footer"><span>Source excerpt matched · Not independent verification</span><button type="button" onClick={() => openSource(spotlight)}>Inspect in transcript ↗</button></div></section>}
+          <section className="signals-ledger" aria-labelledby="signals-ledger-title"><div className="panel-heading"><div><p className="eyebrow">AI FINDINGS / TRANSCRIPT BASED</p><h2 id="signals-ledger-title">The call at a glance</h2></div><span className="panel-tag">{research.findings.length} findings</span></div><div className="signal-list">{research.findings.map((finding) => <article key={finding.id} className={`signal-row category-${finding.category}`}><span>{SUBJECTS[finding.category]}</span><h3>{finding.headline}</h3></article>)}</div><div className="signal-actions"><button type="button" className="text-btn" onClick={() => onViewChange("findings")}>{developments.length} developments ↗</button><button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>{concerns.length} {concerns.length === 1 ? "concern" : "concerns"} & sources ↗</button></div>{!concerns.length && <p className="context-limit">{emptyConcern}</p>}</section>
+        </div></div>
         <p className="source-scope">This brief reflects management’s account. A matched quotation does not independently verify the claim or establish that the AI interpretation is supported.</p>
       </>}
       {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
@@ -102,7 +107,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
-      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div>
+      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} onLoaded={setComparisonContext} /></div>
       <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
         <p>Business findings use the call transcript. Every displayed citation was matched to that source; numeric values were compared with the cited text. This does not establish semantic support, independent truth, or complete risk coverage. Research context is separate and is not fed into a second AI report.</p>
         <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length} proposed items were omitted by source checks.</p>

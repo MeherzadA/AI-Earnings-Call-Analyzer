@@ -8,7 +8,7 @@ function QuoteContext({ outlook }) {
   return <blockquote>{before > 0 && "…"}{text.slice(before, start)}<mark>{outlook.quote}</mark>{text.slice(end, after)}{after < text.length && "…"}</blockquote>;
 }
 
-export default function ResearchContext({ result, onSource, active }) {
+export default function ResearchContext({ result, onSource, active, onLoaded }) {
   const [context, setContext] = useState(result.research?.context?.version === 3 ? result.research.context : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -18,6 +18,7 @@ export default function ResearchContext({ result, onSource, active }) {
     try {
       const data = await apiRequest(`/reports/${result.report_id}/context`, { method: "POST" });
       setContext(data.context);
+      onLoaded?.(data.context);
     } catch (failure) { setError(failure.message); }
     finally { setLoading(false); }
   }
