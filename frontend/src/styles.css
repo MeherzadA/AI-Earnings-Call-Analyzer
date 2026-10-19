@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 
 :root {
   --bg: #fbfcff; --surface: #fff; --border: #dfe5ef; --border-strong: #c8d2e2;
@@ -6,6 +6,7 @@
   --accent-light: #edf3ff; --navy: #174fc4; --green: #08795c; --gold: #9d7717; --critical: #bd2747;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif; --font-mono: "IBM Plex Mono", monospace;
   --serif: Georgia, "Times New Roman", serif;
+  --display: "Manrope", "Segoe UI", sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; color: var(--ink); background: var(--bg); font-family: var(--font); -webkit-font-smoothing: antialiased; }
@@ -195,7 +196,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .workspace-tabs button { min-height: 44px; flex-shrink: 0; padding: 9px 16px; border: 1px solid transparent; border-radius: 3px; background: transparent; color: var(--ink-2); font-size: 12px; }
 .workspace-tabs button[aria-selected="true"] { background: var(--accent-light); color: var(--accent); border-bottom: 3px solid var(--accent); font-weight: 600; }
 .workspace-tabs button:hover:not([aria-selected="true"]) { background: var(--accent-light); }
-.workspace-tabs button span { display: inline-block; margin-left: 8px; padding: 2px 5px; background: #ffffff33; font: 10px var(--font-mono); }
 .report-workspace { min-width: 0; }
 .report-intro { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 0 3px; border-bottom: 1px solid var(--border); }
 .tone-tag { font-size: 12px; color: var(--ink-2); text-transform: capitalize; }

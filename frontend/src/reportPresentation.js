@@ -22,3 +22,9 @@ export function marketWindow(result) {
   if (!prices[0] || !prices[1]) return "The chart uses regular-session closing prices, not after-hours or intraday moves.";
   return `${callDateLabel(prices[0].date)} close ($${prices[0].price.toFixed(2)}) → ${callDateLabel(prices[1].date)} close ($${prices[1].price.toFixed(2)}). After-hours and intraday prices are not shown.`;
 }
+
+export function priceSeries(result) {
+  const prices = result.daily_prices || [];
+  if (!(prices[0]?.price > 0)) return [];
+  return prices.map((item, index) => ({ ...item, session: index ? `Day ${index}` : "Call day", change: (index === 1 ? result.return_1day : index === 5 ? result.return_5day : null) ?? (item.price / prices[0].price - 1) * 100 }));
+}
