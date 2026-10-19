@@ -251,6 +251,68 @@ p, h1, h2, h3 { margin: 0; }
 .example-action { display: flex; justify-content: space-between; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--accent); }
 .report-actions { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .report-actions .back-btn { padding: 8px 0; }
+.has-report .main { max-width: 1340px; padding-top: 20px; gap: 16px; }
+.has-report .search-section { align-items: stretch; text-align: left; }
+.report-search > summary { min-height: 44px; display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--ink-3); cursor: pointer; }
+.report-search .search-bar { max-width: none; margin: 4px 0 20px; }
+.workspace-tabs { display: flex; gap: 5px; flex-wrap: wrap; position: sticky; top: 0; z-index: 10; background: var(--bg); border-bottom: 1px solid var(--border-strong); padding: 8px 0; }
+.workspace-tabs button { min-height: 44px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); padding: 10px 16px; font-size: 12px; }
+.workspace-tabs button[aria-selected="true"] { background: var(--accent); color: white; }
+.workspace-tabs button span { margin-left: 8px; font: 10px var(--font-mono); opacity: .8; }
+.report-workspace, .brief-pane { min-width: 0; }
+.brief-pane { display: flex; flex-direction: column; gap: 20px; }
+.overview-workspace { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr); gap: 24px; align-items: start; }
+.brief-pane .financial-highlights { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.brief-pane .financial-highlight { padding: 18px; }
+.brief-pane .financial-value { font-size: 23px; min-height: 30px; margin-bottom: 12px; }
+.overview-stories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.overview-story { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 22px; display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.overview-story h2 { font: 22px/1.35 Georgia, serif; }
+.overview-story > p:not(.eyebrow) { font-size: 12px; line-height: 1.85; color: var(--ink-2); }
+.overview-story .text-btn { margin-top: auto; text-align: left; }
+.overview-concern { background: #faf5ef; border-color: #decfc5; }
+.overview-concern .eyebrow { color: #974c3d; }
+.market-sidebar { position: sticky; top: 82px; min-width: 0; padding: 22px; background: white; border: 1px solid var(--border); border-radius: 14px; }
+.market-panel { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.market-panel .return-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.market-panel-compact .return-metric { padding: 18px; }
+.market-panel-compact .return-metric strong { font-size: 25px; }
+.market-panel-compact .section-heading h2 { font-size: 27px; }
+.market-panel-compact .chart-card { padding: 0; border: 0; box-shadow: none; }
+.market-panel-compact .chart-heading { flex-wrap: wrap; gap: 8px; }
+.market-caveat { font-size: 11px; color: var(--ink-3); line-height: 1.8; }
+.findings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.findings-grid .finding-columns { grid-template-columns: 1fr; gap: 16px; }
+.findings-grid .finding-interpretation { border-left: 0; border-top: 1px solid var(--border); padding: 16px 0 0; }
+.research-context { display: flex; flex-direction: column; gap: 20px; }
+.context-load { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.context-load p, .context-card > p { font-size: 13px; line-height: 1.85; color: var(--ink-2); max-width: 850px; }
+.context-stamp { color: var(--ink-3); font: 10px/1.8 var(--font-mono); }
+.context-card-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+.context-card-heading h3 { font: 24px Georgia, serif; }
+.context-status { font-size: 10px; color: var(--ink-3); padding: 6px 10px; background: var(--bg); border-radius: 6px; }
+.comparison-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 22px 0; }
+.comparison-values > div { padding: 20px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+.comparison-values span { display: block; font-size: 11px; color: var(--ink-3); margin-bottom: 12px; }
+.comparison-values strong { font: 21px/1.5 var(--font-mono); overflow-wrap: anywhere; }
+.comparison-reported { margin: 18px 0; font-size: 13px; }
+.context-card h4 { font-size: 12px; margin: 22px 0 12px; }
+.prior-outlook { margin-top: 12px; border: 1px solid var(--border); border-radius: 9px; padding: 0 18px; }
+.prior-outlook summary { cursor: pointer; font: 15px/1.8 Georgia, serif; padding: 16px 0; }
+.prior-outlook blockquote { font-size: 12px; line-height: 1.9; margin: 12px 0; white-space: pre-wrap; }
+.prior-outlook p { color: var(--ink-3); font-size: 11px; line-height: 1.8; margin-bottom: 16px; }
+.context-limit { font-size: 11px !important; color: var(--ink-3) !important; margin-top: 18px; line-height: 1.85; }
+.context-notice { color: var(--ink-3); font-size: 12px; line-height: 1.85; margin-top: 12px; }
+.external-context-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.context-card > a, .filing-fact a { display: inline-block; color: var(--accent); font-size: 12px; padding: 12px 0; min-height: 44px; }
+.filing-fact > strong { font: 24px var(--font-mono); }
+.filing-fact > p { color: var(--ink-3); font-size: 11px; line-height: 1.8; margin-top: 12px; }
+.news-list { list-style: none; padding: 0; margin: 10px 0; }
+.news-list li { border-bottom: 1px solid var(--border); padding: 16px 0; }
+.news-list li p { font: 10px/1.8 var(--font-mono); color: var(--ink-3); margin-bottom: 7px; }
+.news-list a { color: var(--accent); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+@media (max-width: 940px) { .overview-workspace { grid-template-columns: 1fr; } .market-sidebar { position: static; } .findings-grid { grid-template-columns: 1fr; } }
+@media (max-width: 600px) { .workspace-tabs { gap: 2px; } .workspace-tabs button { font-size: 11px; padding: 10px; } .overview-stories, .external-context-grid, .comparison-values { grid-template-columns: 1fr; } .market-sidebar { padding: 18px; } .context-card { padding: 20px; } }
 .report-nav { display: flex; flex-wrap: wrap; gap: 8px 22px; border-block: 1px solid var(--border); }
 .report-nav a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-size: 12px; }
 #market-reaction, #concerns, #findings { scroll-margin-top: 30px; }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
+import ResearchContext from "./ResearchContext.jsx";
 
 const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Concerns & risks", opportunities: "Opportunities" };
 
@@ -70,47 +71,43 @@ function SourceViewer({ reportId, citation, expectedHash, onClose }) {
   </dialog>;
 }
 
-export default function ResearchReport({ result, onUpgrade }) {
+export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange }) {
   const [source, setSource] = useState(undefined);
   const research = result.research;
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
   const openSource = (citation = null) => setSource(citation);
+  const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
     {research ? <>
-      <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read full transcript ↗</button></div>
-      <p className="source-scope">Transcript-only brief: management’s account of the quarter, including analyst Q&A where available. Quotations show what was said; they do not independently verify it. This report has no SEC-filing or news cross-check.</p>
-      <details className="checks-explainer"><summary>What has been checked?</summary>
-        <p>Every displayed citation was matched to the saved transcript. Numeric values were compared with the cited excerpts. These checks do not establish that a claim or AI interpretation is supported, or that management’s statements are true.</p>
-        <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length > 0 && `${research.checks.discarded.length} proposed items were omitted because source checks failed.`}</p>
-        {research.curation && <p>Selected statements in this example received a development-time AI review. {research.curation.changes.filter((change) => change.field === "interpretation" && change.action === "removed").length} unsupported interpretations were removed. Concern categories may also be curated. <a href="/review.html">Inspect the assessments and original drafts ↗</a></p>}
-        <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>
-        <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method and limitations ↗</a>
-      </details>
-      {research.financial_highlights.length > 0 && <section className="financial-highlights" aria-label="Financial highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}>
-        <h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} />
-      </article>)}</section>}
-      <section className="research-findings concerns-section" id="concerns" aria-labelledby="concerns-title">
-        <div className="section-heading"><div><p className="eyebrow">THE OTHER SIDE OF THE QUARTER</p><h2 id="concerns-title">Concerns & risks</h2></div><span>{concerns.length} retained {concerns.length === 1 ? "finding" : "findings"}</span></div>
-        <p className="section-description">Disclosed setbacks, constraints and uncertainties. These findings use the same source checks as the rest of the brief.</p>
-        {concerns.length ? concerns.map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />) : <p className="risk-coverage-note">No dedicated concern was retained in this saved report. That does not establish that the company has no risks. Negative results may also appear under Key developments; this brief is not a complete risk assessment.</p>}
-      </section>
-      <section className="research-findings" id="findings" aria-labelledby="findings-title">
-        <div className="section-heading"><div><p className="eyebrow">THE QUARTER, IN FOCUS</p><h2 id="findings-title">Key developments</h2></div><span>{developments.length} {developments.length === 1 ? "finding" : "findings"}</span></div>
+      <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>
+      {view === "overview" && <>
+        <section className="financial-highlights" aria-label="Financial highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</section>
+        <div className="overview-stories">
+          <section className="overview-story"><p className="eyebrow">KEY DEVELOPMENT</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>Explore {developments.length} findings ↗</button></section>
+          <section className="overview-story overview-concern"><p className="eyebrow">CONCERN TO EXAMINE</p>{concerns[0] ? <><h2>{concerns[0].headline}</h2><p>{concerns[0].observation}</p></> : <><h2>Risk coverage is limited</h2><p>{emptyConcern}</p></>}<button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>Inspect concerns & sources ↗</button></section>
+        </div>
+        <p className="source-scope">The brief reflects what management said. Matching a quotation does not independently verify the claim. <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Compare with earlier guidance & outside context ↗</button></p>
+      </>}
+      {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
+        <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
         <p className="section-description">AI-written observations and interpretations, with their source evidence. Guidance describes management’s expectations.</p>
-        {!developments.length && <p className="section-description">All retained findings are shown in Concerns & risks above.</p>}
-        {developments.slice(0, 3).map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}
-        {developments.length > 3 && <details className="more-findings"><summary>Explore {developments.length - 3} more {developments.length === 4 ? "finding" : "findings"} <span aria-hidden="true">↓</span></summary>
-          {Object.entries(SUBJECTS).map(([category, label]) => {
-            const remaining = developments.slice(3).filter((f) => f.category === category);
-            return remaining.length > 0 && <section className="finding-group" key={category}><h3>{label}</h3>{remaining.map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}</section>;
-          })}
-        </details>}
-      </section>
+        <div className="findings-grid">{(view === "concerns" ? concerns : developments).map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}</div>
+        {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
+        {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
+      </section>}
+      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} /></div>
+      <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
+        <p>Business findings use the call transcript. Every displayed citation was matched to that source; numeric values were compared with the cited text. This does not establish semantic support, independent truth, or complete risk coverage. Research context is separate and is not fed into a second AI report.</p>
+        <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length} proposed items were omitted by source checks.</p>
+        {research.curation && <p>Selected example statements received development-time AI review. {research.curation.changes.filter((change) => change.field === "interpretation" && change.action === "removed").length} unsupported interpretations were removed. Concern categories may also be curated. <a href="/review.html">Inspect original drafts and assessments ↗</a></p>}
+        <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>
+        <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method & limitations ↗</a>
+      </details>
     </> : <section className="legacy-report">
-      <div className="legacy-notice"><div><h2>This is an earlier report</h2><p>Source checks are unavailable for this version. Generate a new brief from the saved transcript; the original report is retained.</p></div><button className="outline-btn" type="button" onClick={onUpgrade}>Build source-based report ↗</button></div>
+      <div className="legacy-notice"><div><h2>This is an earlier report</h2><p>Source checks are unavailable. A new brief can use the saved transcript; the original is retained.</p></div><button className="outline-btn" type="button" onClick={onUpgrade}>Build source-based report ↗</button></div>
       <div className="card legacy-summary"><p className="card-label">Earlier AI summary</p><p>{result.analysis.summary}</p><button type="button" className="text-btn" onClick={() => openSource()}>Read the saved transcript ↗</button></div>
-      {[["Key claims", result.analysis.key_claims], ["Risks", result.analysis.red_flags], ["Opportunities", result.analysis.opportunities]].map(([title, items]) => <details className="legacy-list" key={title}><summary>{title} <span>{items?.length || 0}</span></summary><ul>{items?.map((item, i) => <li key={i}>{item}</li>)}</ul>{!items?.length && <p>None listed in the earlier report.</p>}</details>)}
+      {[["Key claims", result.analysis.key_claims], ["Risks", result.analysis.red_flags], ["Opportunities", result.analysis.opportunities]].map(([title, items]) => <details className="legacy-list" key={title}><summary>{title} <span>{items?.length || 0}</span></summary><ul>{items?.map((item, i) => <li key={i}>{item}</li>)}</ul>{!items?.length && <p>None listed.</p>}</details>)}
     </section>}
     {source !== undefined && <SourceViewer reportId={result.report_id} citation={source} expectedHash={research?.source_hash} onClose={() => setSource(undefined)} />}
   </>;

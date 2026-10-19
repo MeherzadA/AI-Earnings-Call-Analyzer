@@ -4,6 +4,8 @@ The public frontend is hosted on Vercel, the API on Render, and PostgreSQL on Su
 
 ## Verified evidence-report release
 
+The subsequent workspace update replaces fragment links with stateful report views and adds optional cached research context. It requires no new database column. Deploy the backend providing `POST /reports/{id}/context` before releasing the frontend's Research context view. Switching views must not issue another report read; loading context must not call Gemini. SEC failures remain visible rather than counting as completed checks. See [research context details](research-context.md).
+
 - [Release PR #6](https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/pull/6) merged as `f1359d79ed4b2b2321b0bda1eab4e89923388a12`. Vercel reported a successful production deployment for that merge. Render deployed backend commit `dfa2c09adc4678550e9581ccf587f2b94eb8423b`; the subsequent code change was one frontend CSS rule.
 - Render build logs confirmed Python 3.11.17, successful application startup and HTTP 200 database health before the new frontend was released.
 - A fresh private backup preceded the nullable-column migration. The migration and example seeding preserved all 19 transcripts, 10 analyses, original fields and table RLS settings. TLS certificate verification remained enabled. The local PostgreSQL database was untouched.

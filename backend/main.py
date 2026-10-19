@@ -39,6 +39,7 @@ from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
+from context import build_context
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -129,6 +130,38 @@ def read_transcript(report_id: int, db: Session = Depends(get_db)):
             "passages": source_passages(transcript.raw_text)}
 
 
+@app.post("/reports/{report_id}/context")
+def load_context(report_id: int, db: Session = Depends(get_db)):
+    transcript, analysis = report_by_id(db, report_id)
+    research = report_response(transcript, analysis)["research"]
+    if not research:
+        raise HTTPException(status_code=409, detail="Build a source-based report before loading comparison context.")
+    if research.get("context"):
+        return {"context": research["context"], "cached": True}
+    if not generation_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
+    try:
+        db.refresh(analysis)
+        research = json.loads(analysis.research_json)
+        if research.get("context"):
+            return {"context": research["context"], "cached": True}
+        previous_year, previous_quarter = (transcript.year, int(transcript.quarter) - 1) if int(transcript.quarter) > 1 else (transcript.year - 1, 4)
+        previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
+        prices = json.loads(analysis.daily_prices or "[]")
+        call_date = research.get("call_date") or (prices[0]["date"] if prices else None)
+        try:
+            context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), research, call_date,
+                                    {"content": previous.raw_text} if previous else None)
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        research["context"] = context
+        analysis.research_json = json.dumps(research)
+        db.commit()
+        return {"context": context, "cached": False}
+    finally:
+        generation_lock.release()
+
+
 @app.get("/examples")
 def examples(db: Session = Depends(get_db)):
     periods = [("AAPL", 2024, "1"), ("NVDA", 2024, "4"), ("PYPL", 2025, "4")]
@@ -176,6 +209,8 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
                                         transcript_text=transcript["content"])
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
+        if transcript.get("report_date"):
+            result["research"]["call_date"] = transcript["report_date"]
         if existing:
             # Upgrade only the new column; retain the original report and price fields.
             db_analysis.research_json = json.dumps(result["research"])

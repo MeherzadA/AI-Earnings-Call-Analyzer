@@ -248,6 +248,15 @@ function ReturnMetric({ label, value }) {
   return <div className="return-metric"><span>{label}</span><strong className={value > 0 ? "gain" : value < 0 ? "loss" : ""}>{value == null ? "Unavailable" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`}</strong><small>from the call-day close</small></div>;
 }
 
+function MarketPanel({ result, compact = false }) {
+  return <section className={`market-panel ${compact ? "market-panel-compact" : ""}`} aria-labelledby="market-title">
+    <div className="section-heading"><div><p className="eyebrow">AFTER THE CALL</p><h2 id="market-title">Market reaction</h2></div></div>
+    <div className="return-metrics"><ReturnMetric label="1 trading day" value={result.return_1day} /><ReturnMetric label="5 trading days" value={result.return_5day} /></div>
+    <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} />
+    <p className="market-caveat">Price movements provide context, not proof of what caused the reaction.</p>
+  </section>;
+}
+
 function ExampleFeed({ examples, onSelect, loading, pending, error, onRetry }) {
   const cards = [
     { ticker: "AAPL", name: "Apple", period: "Q1 2024", description: "Revenue, Services, and management’s outlook." },
@@ -410,8 +419,12 @@ export default function App() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [shareStatus, setShareStatus] = useState("");
+  const [reportView, setReportView] = useState("overview");
   const reportHeading = useRef(null);
   const requestNumber = useRef(0);
+  const displayedReport = useRef(null);
+
+  useEffect(() => { setReportView("overview"); }, [result?.report_id]);
 
   useEffect(() => {
     document.title = result ? `${result.ticker} Q${result.quarter} ${result.year} · Earnings Analyzer` : "Earnings Analyzer";
@@ -427,6 +440,7 @@ export default function App() {
   }, [loading]);
 
   function setReportLocation(id, push = true) {
+    displayedReport.current = id ? Number(id) : null;
     const url = new URL(window.location.href);
     if (id) url.searchParams.set("report", String(id));
     else url.searchParams.delete("report");
@@ -454,6 +468,8 @@ export default function App() {
   useEffect(() => {
     function navigate() {
       const id = reportIdFromSearch(window.location.search);
+      // Fragment navigation must not reload the currently displayed report.
+      if (id && id === displayedReport.current) return;
       if (id) loadReport(id, false);
       else {
         const invalid = new URLSearchParams(window.location.search).has("report");
@@ -509,11 +525,12 @@ export default function App() {
     </div></header>
     <main className="main" id="main">
       <div className="search-section">
-        <span className="eyebrow">EARNINGS RESEARCH, WITH THE SOURCE ATTACHED</span>
+        {!result && <><span className="eyebrow">EARNINGS RESEARCH, WITH THE SOURCE ATTACHED</span>
         <h1 className="hero-title">Understand the quarter.<br/><span>Check the evidence.</span></h1>
         <p className="hero-sub">A concise earnings-call brief with source passages, management guidance, and the market’s reaction.</p>
         <SearchBar onSubmit={handleSubmit} loading={loading} period={result} />
-        <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies.</p>
+        <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies.</p></>}
+        {result && <details className="report-search"><summary>Analyze another call <span aria-hidden="true">＋</span></summary><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></details>}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
       {!result && !loading && <>
@@ -529,12 +546,23 @@ export default function App() {
         <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
         {shareStatus === "manual" && <p className="share-fallback">Copy this link: <a href={reportUrl(window.location.href, result.report_id)}>{reportUrl(window.location.href, result.report_id)}</a></p>}
         <div className="report-heading"><div><p className="eyebrow">EARNINGS CALL BRIEF</p><h1 ref={reportHeading} tabIndex={-1}>{result.ticker}<span>Q{result.quarter} {result.year}</span></h1></div><span className="report-status">{result.cached ? "Saved report" : "New brief saved"}</span></div>
-        <nav className="report-nav" aria-label="Report sections"><a href="#market-reaction">Market reaction</a>{result.research && <><a href="#concerns">Concerns & risks</a><a href="#findings">Key developments</a></>}</nav>
-        <div className="market-section" id="market-reaction"><div className="section-heading"><div><p className="eyebrow">AFTER THE CALL</p><h2>How the market moved</h2></div></div>
-          <div className="return-metrics"><ReturnMetric label="1 trading day" value={result.return_1day} /><ReturnMetric label="5 trading days" value={result.return_5day} /><div className="return-context"><span className="card-label">Price context</span><p>Price movements provide context. They do not establish what caused the market’s reaction.</p></div></div>
-          <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} />
+        <nav className="workspace-tabs" role="tablist" aria-label="Report views" onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+          const index = tabs.indexOf(event.target);
+          if (index < 0) return;
+          event.preventDefault();
+          const next = event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+          tabs[next].focus(); tabs[next].click();
+        }}>
+          {(result.research ? [["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns & risks"], ["market", "Market"], ["research", "Research context"]] : [["overview", "Overview"], ["market", "Market"]]).map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}{id === "concerns" && <span>{result.research.findings.filter((finding) => finding.category === "risks").length}</span>}</button>)}
+        </nav>
+        <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className={reportView === "overview" ? "report-workspace overview-workspace" : "report-workspace"}>
+          {reportView === "market" ? <MarketPanel result={result} /> : <>
+            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onUpgrade={() => handleSubmit(result, true)} /></div>
+            {reportView === "overview" && <aside className="market-sidebar"><MarketPanel result={result} compact /></aside>}
+          </>}
         </div>
-        <ResearchReport key={result.report_id} result={result} onUpgrade={() => handleSubmit(result, true)} />
         <p className="report-note">Source matching checks quotations and numeric consistency. AI interpretations may still be unsupported; inspect the evidence and context.</p>
       </div>}
     </main>
