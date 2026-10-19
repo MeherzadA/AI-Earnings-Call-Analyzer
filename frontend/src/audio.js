@@ -11,3 +11,19 @@ export function audioTime(seconds) {
   const rest = String(total % 60).padStart(2, "0");
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
+
+export function speechSections(passages) {
+  return passages.flatMap((passage) => {
+    const sections = [];
+    let text = "";
+    for (const word of passage.text.split(/\s+/).filter(Boolean)) {
+      if (text && text.length + word.length + 1 > 240) {
+        sections.push({ text, passageId: passage.id });
+        text = "";
+      }
+      text += `${text ? " " : ""}${word}`;
+    }
+    if (text) sections.push({ text, passageId: passage.id });
+    return sections;
+  });
+}
