@@ -200,7 +200,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
             context_source["financial_highlights"] = [revenue] if revenue else []
         try:
             context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), context_source, call_date,
-                                    {"content": previous.raw_text} if previous else None)
+                                    {"content": previous.raw_text} if previous else None, current_text=transcript.raw_text)
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         research["context"] = context

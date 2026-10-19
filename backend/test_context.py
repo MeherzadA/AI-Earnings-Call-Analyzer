@@ -4,9 +4,27 @@ from unittest.mock import patch
 import context
 
 from context import prior_outlook, compare_outlook, revenue_highlight, dated_news, transcript_revenue
+from comparisons import additional_comparisons
 
 
 class ContextChecks(unittest.TestCase):
+    def test_additional_comparisons_require_matching_metric_period_and_quotes(self):
+        earlier = "For Q1 FY2024, we expect iPhone revenue to grow year-over-year. For Q1 FY2024, we expect company gross margin to be between 45% and 46%."
+        actual = "iPhone revenue was $69.7 billion, up 6% year-over-year. Company gross margin was 45.9%, up 70 basis points sequentially."
+        outlooks = prior_outlook(earlier, 1, year=2024)
+        pairs = additional_comparisons(earlier, actual, outlooks, 1, 2024)
+        self.assertEqual([item["metric"] for item in pairs], ["iPhone revenue", "Company gross margin"])
+        self.assertEqual(pairs[0]["reported"]["value"], "+6%")
+        self.assertEqual(pairs[1]["position"], "within")
+        for item in pairs:
+            citation = item["reported"]["citations"][0]
+            self.assertEqual(actual[citation["start"]:citation["end"]], citation["quote"])
+        self.assertEqual(additional_comparisons(earlier, actual, prior_outlook(earlier, 2, year=2024), 2, 2024), [])
+        wrong = actual.replace("iPhone", "iPad").replace("Company gross margin", "Services gross margin")
+        self.assertEqual(additional_comparisons(earlier, wrong, outlooks, 1, 2024), [])
+        adjusted = actual.replace("up 6%", "up 6% in constant currency").replace("Company gross margin", "Adjusted gross margin")
+        self.assertEqual(additional_comparisons(earlier, adjusted, outlooks, 1, 2024), [])
+
     def test_research_refresh_removes_sec_and_only_retries_failed_news(self):
         cached = {"version": 4, "call_date": "2024-02-01", "filings": {"status":"unavailable"}, "news": {"status":"available", "items":[]}}
         with patch("context.download", side_effect=AssertionError("No SEC requests")), patch("context.dated_news", return_value={"status":"empty", "items":[]}) as news:

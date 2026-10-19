@@ -20,6 +20,10 @@ The SEC integration was removed because automated requests consistently failed. 
 
 ## Dated news
 
+Context version 6 adds literal segment-growth forecast/result pairs and company gross-margin ranges when the metric, basis and target period can be matched. Both sides retain their source quotes; adjusted metrics, wrong segments and ambiguous periods are omitted. Gross-margin forecasts currently require the target quarter in the forecast sentence itself, so some valid section-scoped guidance will be missed. These conservative matches are not analyst-consensus comparisons or a semantic accuracy guarantee.
+
+Research lets users choose among matched metrics. BEFORE and AFTER have distinct colors and prominent labels, with the target quarter repeated on both sides. The coverage board provides publisher cards and filters based on headline text. Decorative topic icons are not financial charts, article summaries, or live-market indicators. Entry and hover motion honor reduced-motion settings.
+
 Google News RSS supplies up to five headline links from distinct publishers in the fourteen days through the call's UTC calendar date. Publication timestamps are filtered again after fetching. Current news is not attached to an older call. Same-day headlines may still have been published after the call; exact call-time ordering is not claimed. Historical feed coverage can be incomplete.
 
 The app displays publisher, publication date and headline. It does not read, summarize, independently verify or feed article contents into Gemini. Headlines are further-reading context, not accepted factual evidence for the existing brief. A range of publishers is not a guarantee of neutrality.

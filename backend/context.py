@@ -9,10 +9,11 @@ import requests
 
 from research import source_hash, source_passages, quantities
 from transcript import fetch_transcript
+from comparisons import additional_comparisons
 
 USER_AGENT = "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)"
 NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
-CONTEXT_VERSION = 5
+CONTEXT_VERSION = 6
 
 
 def context_complete(context):
@@ -196,7 +197,7 @@ def dated_news(ticker, call_date):
             "limitation": "Headline metadata from Google News RSS, not read or verified article content. UTC publication dates only; same-day articles may be after the call. Historical feed coverage is incomplete."}
 
 
-def build_context(ticker, year, quarter, research, call_date, previous=None):
+def build_context(ticker, year, quarter, research, call_date, previous=None, current_text=""):
     if not call_date:
         current = fetch_transcript(ticker, year, quarter)
         call_date = current.get("report_date") if current else None
@@ -229,5 +230,5 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
             news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": []}
     return {"version": CONTEXT_VERSION, "call_date": call_date, "loaded_at": datetime.now(timezone.utc).isoformat(),
             "external_sources_loaded_at": cached.get("external_sources_loaded_at", cached.get("loaded_at")) if cached.get("call_date") == call_date else datetime.now(timezone.utc).isoformat(), "previous_call": prior,
-            "comparison": comparison, "news": news,
+            "comparison": comparison, "additional_comparisons": additional_comparisons(previous["content"], current_text, prior["outlooks"], quarter, year, actual.get("period_terms", []) if actual else []) if previous and prior["status"] == "available" else [], "news": news,
             "scope": "No extra AI generation. Prior-call extraction, stated-value arithmetic, and dated headline links. These sources do not establish impartiality or report accuracy."}
