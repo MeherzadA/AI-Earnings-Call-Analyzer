@@ -94,6 +94,18 @@
 .research-desk .header-nav a,.research-desk .header-nav button { font-size:13px; padding:8px 0; color:#536178; }
 .research-desk .main { max-width:1560px; padding:22px 24px 36px; gap:24px; }
 .desk-controls { display:flex; align-items:center; gap:22px; }
+.desk-controls[hidden] { display:none; }
+.report-loading { width:min(100%,540px); margin:12px auto; padding:28px; align-items:stretch; gap:22px; text-align:left; }
+.loading-call { display:flex; align-items:center; gap:13px; }
+.loading-call .company-mark { width:42px; height:42px; flex:none; }
+.loading-call h1 { font-size:24px; line-height:1.25; letter-spacing:-.5px; }
+.loading-call p { margin-top:5px; color:#5d6a7c; font-size:14px; }
+.report-loading .loading-bar { width:100%; }
+.report-loading .loading-text { font-size:20px; line-height:1.45; }
+.report-loading .loading-text > span { display:block; margin-top:9px; font-size:15px; line-height:1.6; }
+.loading-actions { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.loading-actions .elapsed { font-size:12px; }
+.loading-actions .text-btn { min-height:44px; font-size:14px; }
 .research-desk .search-section { flex:1; min-width:0; gap:0; padding:15px 20px 12px; background:#132640; border:0; border-left:4px solid #f0c03d; border-radius:8px; }
 .research-desk .search-bar { max-width:none; padding:0; border:0; gap:14px; background:none; }
 .research-desk .search-fields { gap:12px; }
@@ -533,10 +545,11 @@
  .research-desk .finding-card { padding:19px; }
 }
 @media(max-width:600px) {
- .research-desk .header-inner { gap:14px; padding:17px 14px; }
- .research-desk .brand-name { font-size:20px; }
- .research-desk .header-nav { margin:0; gap:17px; }
+ .research-desk .header-inner { flex-wrap:nowrap; gap:10px; padding:10px 14px; }
+ .research-desk .brand-name { font-size:18px; white-space:nowrap; }
+ .research-desk .header-nav { width:auto; border:0; padding:0; margin:0 0 0 auto; gap:13px; }
  .research-desk .header-nav a,.research-desk .header-nav button { font-size:13px; }
+ .report-loading { margin:6px auto; padding:22px; }
  .research-desk .financial-value { font-size:19px; letter-spacing:-.7px; }
  .research-desk .brief-takeaway,.research-desk .brief-takeaway + .brief-takeaway { padding:19px; }
  .research-desk .brief-takeaway h3,.research-desk .finding-body h3 { font-size:21px; }
@@ -546,4 +559,10 @@
  .coverage-count { font-size:12px; }
  .story-content h4 { font-size:21px; }
  .lead-story .story-content h4 { font-size:23px; }
+}
+@media(max-width:359px) {
+ .research-desk .header-inner { padding-inline:10px; gap:8px; }
+ .research-desk .brand-name { font-size:16px; }
+ .research-desk .header-nav { gap:10px; }
+ .research-desk .header-nav a,.research-desk .header-nav button { font-size:12px; }
 }
