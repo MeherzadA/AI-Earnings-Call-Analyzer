@@ -55,6 +55,16 @@ class AnalysisFlowTests(unittest.TestCase):
             history = self.client.get("/history").json()
             self.assertEqual(history["total"], 1)
             self.assertEqual(history["history"][0]["ticker"], "AAPL")
+            self.assertEqual(history["history"][0]["call_date"], "2024-02-01")
+
+    def test_future_call_date_is_rejected_before_generation_not_by_fiscal_year(self):
+        main.ensure_past_call("2025-11-19")  # NVIDIA fiscal 2026 was reported in calendar 2025.
+        with patch.object(main, "fetch_transcript", return_value={"content": SOURCE, "report_date": "2099-11-19"}), patch.object(main, "analyze_transcript") as ai:
+            response = self.client.post("/analyze", json={"ticker": "NVDA", "year": 2099, "quarter": 3})
+            self.assertEqual(response.status_code, 404)
+            self.assertIn("future", response.json()["detail"])
+            ai.assert_not_called()
+            self.assertEqual(self.client.get("/history").json()["total"], 0)
 
     def test_invalid_period_and_ticker_do_not_call_providers(self):
         with patch.object(main, "fetch_transcript") as transcript:

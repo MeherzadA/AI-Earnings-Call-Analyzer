@@ -22,6 +22,7 @@ import logging
 from contextlib import asynccontextmanager
 from threading import Lock
 from typing import Literal
+from datetime import datetime, timezone
 from sqlalchemy import func, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -107,10 +108,19 @@ def report_response(transcript, analysis, cached=True):
         "summary": analysis.summary, "key_claims": json.loads(analysis.key_claims or "[]"),
         "red_flags": json.loads(analysis.red_flags or "[]"), "opportunities": json.loads(analysis.opportunities or "[]"),
     }
+    prices = json.loads(analysis.daily_prices or "[]")
+    call_date = (research or {}).get("call_date") or (prices[0]["date"] if prices else None)
+    ensure_past_call(call_date)
     return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
             "quarter": int(transcript.quarter), "analysis": result, "research": research,
-            "daily_prices": json.loads(analysis.daily_prices or "[]"),
+            "call_date": call_date, "daily_prices": prices,
             "return_1day": analysis.return_1day, "return_5day": analysis.return_5day, "cached": cached}
+
+
+def ensure_past_call(call_date):
+    # Fiscal years may be ahead of the calendar year. Only the actual call date is a future-date check.
+    if call_date and call_date[:10] > datetime.now(timezone.utc).date().isoformat():
+        raise HTTPException(status_code=404, detail=f"The provider dates this call {call_date}, which is in the future. No analysis was generated.")
 
 
 def report_by_id(db, report_id):
@@ -217,6 +227,7 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
                 raise HTTPException(status_code=502, detail=str(error)) from error
             if not transcript:
                 raise HTTPException(status_code=404, detail=f"No transcript found for {request.ticker} Q{request.quarter} {request.year}")
+        ensure_past_call(transcript.get("report_date"))
         try:
             result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
                                         transcript_text=transcript["content"])
@@ -269,7 +280,9 @@ def get_history(
     total = query.count()
     results = []
     for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all():
-        display = legacy_analysis(json.loads(analysis.research_json)) if analysis.research_json else {
+        research = json.loads(analysis.research_json) if analysis.research_json else None
+        prices = json.loads(analysis.daily_prices or "[]")
+        display = legacy_analysis(research) if research else {
             "sentiment": analysis.sentiment, "sentiment_score": analysis.sentiment_score,
             "summary": analysis.summary,
         }
@@ -279,6 +292,7 @@ def get_history(
             "ticker": t.ticker,
             "year": t.year,
             "quarter": t.quarter,
+            "call_date": (research or {}).get("call_date") or (prices[0]["date"] if prices else None),
             **{key: display[key] for key in ("sentiment", "sentiment_score", "summary")},
             "return_1day": analysis.return_1day,
             "return_5day": analysis.return_5day,
