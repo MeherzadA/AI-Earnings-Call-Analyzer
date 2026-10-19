@@ -32,12 +32,12 @@ export default function MarketPanel({ result, compact = false, onExplore }) {
   const color = (points.at(-1)?.change || 0) < 0 ? "#ce4052" : "#078267";
   const value = mode === "change" ? "change" : "price";
   return <section className={`market-panel market-v2 ${compact ? "market-panel-compact" : ""}`} aria-label="Price action after the call">
-    <div className="market-v2-heading"><div><p className="section-kicker">{compact ? "THE MARKET" : "PRICE ACTION"}</p><h2>{compact ? "After the call" : "The move, and what followed"}</h2></div><span className="market-unit">Regular closes · USD</span></div>
+    <header className="market-v2-heading">{!compact && <span className="market-ticker">{result.ticker}</span>}<div><p className="section-kicker">{compact ? "AFTER EARNINGS" : "MARKET REPLAY"}</p><h2>{compact ? "Price action" : "The market’s next move."}</h2>{!compact && first && <p className="market-date-range">{callDateLabel(first.date)} → {callDateLabel(points.at(-1).date)}</p>}</div><span className="market-unit">Regular closes · USD</span></header>
     {!all.length ? <p className="market-empty">Closing prices aren’t available for this call. The transcript and report remain available.</p> : <>
       <div className="market-summary">
-        <div><span>Next trading day</span><strong className={tone(next?.change)}>{signed(next?.change)}</strong><small>{next ? callDateLabel(next.date) : "Not available"}</small></div>
-        <div><span>After 5 trading days</span><strong className={tone(fifth?.change)}>{signed(fifth?.change)}</strong><small>{fifth ? callDateLabel(fifth.date) : "Not available"}</small></div>
-        {!compact && <div><span>After 1 month · 21 trading days</span><strong className={tone(month?.change)}>{signed(month?.change)}</strong><small>{month ? callDateLabel(month.date) : loading ? "Loading longer history…" : "21st trading-day close not available"}</small></div>}
+        <div className={tone(next?.change)}><span>Next trading day</span><strong className={tone(next?.change)}>{signed(next?.change)}</strong><small>{next ? callDateLabel(next.date) : "Not available"}</small></div>
+        <div className={tone(fifth?.change)}><span>After 5 trading days</span><strong className={tone(fifth?.change)}>{signed(fifth?.change)}</strong><small>{fifth ? callDateLabel(fifth.date) : "Not available"}</small></div>
+        {!compact && <div className={tone(month?.change)}><span>After 1 month · 21 trading days</span><strong className={tone(month?.change)}>{signed(month?.change)}</strong><small>{month ? callDateLabel(month.date) : loading ? "Loading longer history…" : "21st trading-day close not available"}</small></div>}
       </div>
       <div className="chart-control-row"><div className="chart-segment" aria-label="Chart measure"><button type="button" aria-pressed={mode === "change"} onClick={() => setMode("change")}>Return %</button><button type="button" aria-pressed={mode === "price"} onClick={() => setMode("price")}>Price $</button></div>{!compact && <div className="chart-segment" aria-label="Chart window"><button type="button" aria-pressed={windowDays === 1} onClick={() => setWindowDays(1)}>1 day</button><button type="button" aria-pressed={windowDays === 5} onClick={() => setWindowDays(5)}>5 days</button><button type="button" aria-pressed={windowDays === 21} onClick={() => setWindowDays(21)}>1 month</button></div>}</div>
       {!compact && loading && <p className="market-status" role="status">Loading up to 21 post-call trading days…</p>}
@@ -46,12 +46,13 @@ export default function MarketPanel({ result, compact = false, onExplore }) {
       <div className="price-chart" aria-label={`${result.ticker} ${mode === "change" ? "return from call-day close" : "closing price"}`}>
         <ResponsiveContainer width="100%" height={compact ? 210 : 340}>
           <AreaChart data={points} margin={{ top: 20, right: 15, left: compact ? -18 : 0, bottom: 8 }} accessibilityLayer>
+            <defs><linearGradient id={`price-wash-${result.report_id}-${compact}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity={.23}/><stop offset="100%" stopColor={color} stopOpacity={.01}/></linearGradient></defs>
             <CartesianGrid vertical={false} stroke="#e4e9ef" strokeDasharray="3 5" />
             <XAxis dataKey="date" tickFormatter={(date) => { const point = points.find((item) => item.date === date); return compact ? point === first ? "Call" : point?.session.replace("Day ", "D") : new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {month:"short",day:"numeric",timeZone:"UTC"}); }} tickLine={false} axisLine={false} tickMargin={13} interval={compact ? 0 : "preserveStartEnd"} minTickGap={28} fontSize={compact ? 11 : 13} stroke="#65748a" />
             <YAxis tickFormatter={(number) => mode === "change" ? `${number > 0 ? "+" : ""}${Number(number).toFixed(Math.abs(number) < 10 ? 1 : 0)}%` : `$${Number(number).toFixed(number < 100 ? 2 : 0)}`} tickLine={false} axisLine={false} fontSize={compact ? 11 : 13} stroke="#65748a" domain={mode === "change" ? [(min) => Math.min(0, Math.floor(min) - 1), (max) => Math.max(0, Math.ceil(max) + 1)] : [(min) => Math.floor(min * .99 * 100) / 100, (max) => Math.ceil(max * 1.01 * 100) / 100]} />
             <ReferenceLine y={mode === "change" ? 0 : first.price} stroke="#8e9bb0" strokeDasharray="4 4" />
             <Tooltip content={<PriceTooltip />} cursor={{stroke:"#8898b0",strokeDasharray:"3 3"}} />
-            <Area type="linear" dataKey={value} stroke={color} strokeWidth={2.5} fill={color} fillOpacity={.08} baseValue={mode === "change" ? 0 : first.price} dot={points.length > 10 ? false : {fill:color,r:3,stroke:"white",strokeWidth:1.5}} activeDot={{r:6,stroke:"white",strokeWidth:2}} isAnimationActive={false} />
+            <Area type="linear" dataKey={value} stroke={color} strokeWidth={2.5} fill={`url(#price-wash-${result.report_id}-${compact})`} fillOpacity={1} baseValue={mode === "change" ? 0 : first.price} dot={points.length > 10 ? false : {fill:color,r:3,stroke:"white",strokeWidth:1.5}} activeDot={{r:6,stroke:"white",strokeWidth:2}} isAnimationActive={false} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
