@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import ResearchContext from "./ResearchContext.jsx";
+import CallReplay from "./CallReplay.jsx";
 
 const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Concerns & risks", opportunities: "Opportunities" };
 
@@ -30,7 +31,7 @@ function FindingCard({ finding, index, onSource }) {
   </article>;
 }
 
-function SourceViewer({ reportId, citation, expectedHash, onClose }) {
+export function SourceViewer({ reportId, citation, expectedHash, onClose }) {
   const dialog = useRef(null);
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
@@ -71,34 +72,41 @@ function SourceViewer({ reportId, citation, expectedHash, onClose }) {
   </dialog>;
 }
 
-export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange, marketPanel }) {
-  const [source, setSource] = useState(undefined);
+export default function ResearchReport({ result, onUpgrade, view = "overview", onViewChange, marketPanel, onSource }) {
   const research = result.research;
   const [comparisonContext, setComparisonContext] = useState(research?.context?.version === 3 ? research.context : null);
+  const [selectedFindingId, setSelectedFindingId] = useState(research?.findings[0]?.id);
+  const [selectedCitationIndex, setSelectedCitationIndex] = useState(0);
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
-  const spotlight = research?.findings[0]?.citations[0];
+  const selectedFinding = research?.findings.find((finding) => finding.id === selectedFindingId) || research?.findings[0];
+  const spotlight = selectedFinding?.citations[selectedCitationIndex];
+  const overviewFindings = concerns.length ? [...developments.slice(0, 2), concerns[0]] : developments.slice(0, 3);
   const comparison = comparisonContext?.comparison;
   const targetPeriod = `Q${result.quarter} FY${result.year}`;
   const baselinePeriod = `Q${result.quarter} FY${result.year - 1}`;
-  const openSource = (citation = null) => setSource(citation);
+  const openSource = (citation = null) => onSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
     {research ? <>
-      <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>
+      {view !== "overview" && <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>}
       {view === "overview" && <>
-        <section className="overview-financials" aria-labelledby="financials-title"><div className="overview-section-title"><h2 id="financials-title">Reported financials</h2><p>Q{result.quarter} FY{result.year} · From the call transcript</p></div><div className="financial-highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>
-        <div className="console-grid"><div className="console-column">
-          <aside className="market-sidebar">{marketPanel}</aside>
-          <section className="guidance-ledger" aria-labelledby="guidance-ledger-title"><div className="panel-heading"><div><p className="eyebrow">EARLIER EXPECTATION / REPORTED OUTCOME</p><h2 id="guidance-ledger-title">Management outlook ledger</h2></div><span className="panel-tag">{targetPeriod}</span></div>
-            {comparison?.outlook ? <><p className="ledger-period">Forecast issued in Q{comparisonContext.previous_call.quarter} FY{comparisonContext.previous_call.year}, for {targetPeriod}.</p><div className="ledger-table-wrap"><table className="guidance-table"><caption className="sr-only">Earlier management forecast and actual total revenue for {targetPeriod}</caption><thead><tr><th scope="col">Metric</th><th scope="col">Expected {targetPeriod}</th><th scope="col">Reported {targetPeriod}</th></tr></thead><tbody><tr><th scope="row">Total revenue</th><td>{comparison.status === "directional" ? `Broadly unchanged vs ${baselinePeriod}` : comparison.expected}</td><td><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <small>{comparison.actual_change.replace("year over year", `vs ${baselinePeriod}`)}</small>}</td></tr></tbody></table></div><div className="ledger-verdict"><span>{comparison.status === "directional" ? "DIRECTION ONLY" : "STATED-VALUE COMPARISON"}</span><p>{comparison.takeaway}</p></div></> : <div className="ledger-empty"><h3>What was promised for this quarter?</h3><p>{comparison?.message || "Open the preceding call’s revenue outlook and compare it with this quarter’s reported result. The comparison is loaded once and saved."}</p></div>}
-            <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Open comparison & source evidence ↗</button>
+        <div className="console-grid">
+          <section className="call-panel" aria-labelledby="call-panel-title">
+            <div className="panel-heading"><h2 id="call-panel-title">Listen to the call</h2><span className="panel-tag">Q{result.quarter} FY{result.year}</span></div>
+            <CallReplay key={result.report_id} result={result} />
+            <div className="key-points-heading"><h3>Key points</h3><span>Select a point to see its source →</span></div>
+            <div className="key-points">{overviewFindings.map((finding, index) => <button type="button" key={finding.id} aria-pressed={selectedFinding.id === finding.id} className={`key-point ${finding.category === "risks" ? "key-point-risk" : ""}`} onClick={() => { setSelectedFindingId(finding.id); setSelectedCitationIndex(0); }}><span className="point-number">{String(index + 1).padStart(2, "0")}</span><span>{finding.category === "risks" && <small>Concern to watch</small>}{finding.headline}</span><span aria-hidden="true">↗</span></button>)}</div>
+            <div className="call-panel-footer"><button type="button" className="text-btn" onClick={() => onViewChange("findings")}>{developments.length} developments ↗</button><button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>{concerns.length} {concerns.length === 1 ? "concern" : "concerns"} ↗</button></div>
           </section>
-          </div><div className="console-column">
-          {spotlight && <section className="source-spotlight" aria-labelledby="spotlight-title"><div className="panel-heading"><div><p className="eyebrow">TRANSCRIPT / ORIGINAL EVIDENCE</p><h2 id="spotlight-title">Source spotlight</h2></div><span className="panel-tag">{spotlight.passage_id}</span></div><blockquote>“{spotlight.quote}”</blockquote><div className="quote-readout"><h3>AI observation</h3><p>{research.findings[0].observation}</p></div><div className="spotlight-footer"><span>Source excerpt matched · Not independent verification</span><button type="button" onClick={() => openSource(spotlight)}>Inspect in transcript ↗</button></div></section>}
-          <section className="signals-ledger" aria-labelledby="signals-ledger-title"><div className="panel-heading"><div><p className="eyebrow">AI FINDINGS / TRANSCRIPT BASED</p><h2 id="signals-ledger-title">The call at a glance</h2></div><span className="panel-tag">{research.findings.length} findings</span></div><div className="signal-list">{research.findings.map((finding) => <article key={finding.id} className={`signal-row category-${finding.category}`}><span>{SUBJECTS[finding.category]}</span><h3>{finding.headline}</h3></article>)}</div><div className="signal-actions"><button type="button" className="text-btn" onClick={() => onViewChange("findings")}>{developments.length} developments ↗</button><button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>{concerns.length} {concerns.length === 1 ? "concern" : "concerns"} & sources ↗</button></div>{!concerns.length && <p className="context-limit">{emptyConcern}</p>}</section>
-        </div></div>
-        <p className="source-scope">This brief reflects management’s account. A matched quotation does not independently verify the claim or establish that the AI interpretation is supported.</p>
+          {spotlight && <section className={`source-spotlight ${selectedFinding.category === "risks" ? "spotlight-risk" : ""}`} aria-labelledby="spotlight-title"><div className="panel-heading"><h2 id="spotlight-title">In management’s words</h2><span className="panel-tag">{SUBJECTS[selectedFinding.category]}</span></div><div className="selected-source" aria-live="polite"><div className="source-caption"><span>Excerpt {selectedCitationIndex + 1} of {selectedFinding.citations.length} · {spotlight.passage_id}</span>{selectedFinding.citations.length > 1 && <button type="button" onClick={() => setSelectedCitationIndex((index) => (index + 1) % selectedFinding.citations.length)}>Next excerpt →</button>}</div><blockquote>“{spotlight.quote}”</blockquote><p className="selected-observation"><span>AI observation</span>{selectedFinding.observation}</p>{selectedFinding.interpretation && <details className="spotlight-interpretation"><summary>AI interpretation</summary><p>{selectedFinding.interpretation}</p></details>}</div><div className="spotlight-footer"><span>Source excerpt matched</span><button type="button" onClick={() => openSource(spotlight)}>Read in transcript ↗</button></div><p className="spotlight-limit">A matching quote does not independently verify management’s claim.</p></section>}
+          <section className="guidance-ledger" aria-labelledby="guidance-ledger-title"><div className="panel-heading"><h2 id="guidance-ledger-title">Did the outlook hold up?</h2><span className="panel-tag">Revenue</span></div>
+            {comparison?.outlook ? <><p className="ledger-period">What management expected for <strong>{targetPeriod}</strong>, compared with what it reported.</p><div className="outlook-pair"><div><span>Expected</span><strong>{comparison.status === "directional" ? "Broadly unchanged" : comparison.expected}</strong><small>Forecast in Q{comparisonContext.previous_call.quarter} FY{comparisonContext.previous_call.year}{comparison.status === "directional" && <> · vs {baselinePeriod}</>}</small></div><div><span>Reported</span><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <small>{comparison.actual_change.replace("year over year", `vs ${baselinePeriod}`)}</small>}</div></div><p className="outlook-conclusion">{comparison.takeaway}</p></> : <div className="ledger-empty"><p>{comparison?.message || "See what the preceding call forecast for this quarter, alongside the reported outcome."}</p></div>}
+            <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Compare the source statements ↗</button>
+          </section>
+          <aside className="market-sidebar">{marketPanel}</aside>
+        </div>
+        <p className="source-scope">The brief uses management’s transcript. Management tone: {research.management_tone} (AI assessment). {concerns.length ? "" : emptyConcern}</p>
       </>}
       {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
         <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
@@ -121,6 +129,5 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
       {marketPanel && <aside className="market-sidebar">{marketPanel}</aside>}
       {[["Key claims", result.analysis.key_claims], ["Risks", result.analysis.red_flags], ["Opportunities", result.analysis.opportunities]].map(([title, items]) => <details className="legacy-list" key={title}><summary>{title} <span>{items?.length || 0}</span></summary><ul>{items?.map((item, i) => <li key={i}>{item}</li>)}</ul>{!items?.length && <p>None listed.</p>}</details>)}
     </section>}
-    {source !== undefined && <SourceViewer reportId={result.report_id} citation={source} expectedHash={research?.source_hash} onClose={() => setSource(undefined)} />}
   </>;
 }

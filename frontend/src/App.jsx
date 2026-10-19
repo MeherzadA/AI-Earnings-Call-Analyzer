@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { apiRequest } from "./api.js";
-import ResearchReport from "./ResearchReport.jsx";
+import ResearchReport, { SourceViewer } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 
 const EXAMPLES = [
@@ -9,6 +9,11 @@ const EXAMPLES = [
   { ticker: "NVDA", name: "NVIDIA", period: "Q4 2024", description: "Growth, demand, and margin guidance." },
   { ticker: "PYPL", name: "PayPal", period: "Q4 2025", description: "Payments, profitability, and the outlook." },
 ];
+
+function CompanyMark({ ticker }) {
+  const logo = { AAPL: "apple", NVDA: "nvidia", PYPL: "paypal" }[ticker];
+  return <span className="company-mark" aria-hidden="true">{logo ? <img src={`/logos/${logo}.svg`} alt="" /> : ticker.slice(0, 2)}</span>;
+}
 
 function currentQuarter(date) {
   const month = date.getMonth() + 1;
@@ -222,8 +227,8 @@ function StockPriceChart({ dailyPrices, ticker, compact = false }) {
           <Line
             type="linear"
             dataKey="price"
-            stroke="#267260"
-            dot={{ fill: "#267260", r: 4 }}
+            stroke="#536a83"
+            dot={{ fill: "#536a83", r: 3 }}
             activeDot={{ r: 7 }}
             isAnimationActive={false}
             name="Close Price"
@@ -256,7 +261,7 @@ function ReturnMetric({ label, value }) {
 
 function MarketPanel({ result, compact = false }) {
   return <section className={`market-panel ${compact ? "market-panel-compact" : ""}`} aria-labelledby="market-title">
-    <div className="panel-heading"><div><p className="eyebrow">MARKET / DAILY PRICES</p><h2 id="market-title">After the call</h2></div><span className="panel-tag">USD · Daily closes</span></div>
+    <div className="panel-heading"><h2 id="market-title">Market reaction</h2><span className="panel-tag">5 trading days</span></div>
     <div className="return-metrics"><ReturnMetric label="1 trading day" value={result.return_1day} /><ReturnMetric label="5 trading days" value={result.return_5day} /></div>
     <StockPriceChart dailyPrices={result.daily_prices} ticker={result.ticker} compact={compact} />
     <p className="market-caveat">Price movements provide context, not proof of what caused the reaction.</p>
@@ -413,13 +418,14 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [shareStatus, setShareStatus] = useState("");
   const [reportView, setReportView] = useState("overview");
+  const [source, setSource] = useState(undefined);
   const reportHeading = useRef(null);
   const requestNumber = useRef(0);
   const displayedReport = useRef(null);
   const callDate = result?.research?.call_date || result?.daily_prices?.[0]?.date;
   const concernCount = result?.research?.findings.filter((finding) => finding.category === "risks").length || 0;
 
-  useEffect(() => { setReportView("overview"); }, [result?.report_id]);
+  useEffect(() => { setReportView("overview"); setSource(undefined); }, [result?.report_id]);
 
   useEffect(() => {
     document.title = result ? `${result.ticker} Q${result.quarter} ${result.year} · Earnings Analyzer` : "Earnings Analyzer";
@@ -507,7 +513,6 @@ export default function App() {
 
   return <div className={`app ${result ? "has-report" : ""}`}>
     <a className="skip-link" href="#main">Skip to content</a>
-    <div className="desk-strip"><span><span className="status-dot" aria-hidden="true" /> EARNINGS RESEARCH / ON DEMAND</span><span>TRANSCRIPTS · SOURCE EVIDENCE · MARKET REACTION</span></div>
     <header className="app-header"><div className="header-inner">
       <a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-mark" aria-hidden="true">EA</span><span><span className="brand-name">Earnings Analyzer</span><span className="brand-caption">THE TRANSCRIPT RESEARCH DESK</span></span></a>
       <nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()} aria-current={!result ? "page" : undefined}>Research desk</button><a href="/review.html">Quality & evaluation</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a></nav>
@@ -520,7 +525,7 @@ export default function App() {
         <div className="search-caption"><span>01 / SELECT A CALL</span><span>Company fiscal periods</span></div>
         <SearchBar onSubmit={handleSubmit} loading={loading} period={result} />
         <p className="period-help">Choose the company’s fiscal year and quarter. Transcript coverage varies. Saved examples below open without generating a new report.</p></>}
-        {result && <div className="report-search"><p className="query-label">TARGET COMPANY / FISCAL PERIOD</p><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></div>}
+        {result && <div className="report-search"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /></div>}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
       {!result && !loading && <>
@@ -536,7 +541,7 @@ export default function App() {
       {result && <div className="results">
         <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
         {shareStatus === "manual" && <p className="share-fallback">Copy this link: <a href={reportUrl(window.location.href, result.report_id)}>{reportUrl(window.location.href, result.report_id)}</a></p>}
-        <div className="report-heading"><div><p className="eyebrow">EARNINGS / TRANSCRIPT ANALYSIS</p><h1 ref={reportHeading} tabIndex={-1}>{EXAMPLES.find((item) => item.ticker === result.ticker)?.name || result.ticker}<span>{result.ticker} · Q{result.quarter} FY{result.year}</span></h1></div><div className="report-heading-meta"><span className="report-status">{result.cached ? "Saved report" : "New brief saved"}</span>{callDate && <span>CALL DATE / {callDate}</span>}{result.research && <span>{result.research.findings.length} FINDINGS · {concernCount} {concernCount === 1 ? "CONCERN" : "CONCERNS"}</span>}</div></div>
+        <div className="report-heading"><div className="company-heading"><CompanyMark ticker={result.ticker} /><div><p className="eyebrow">{result.ticker} / Q{result.quarter} FY{result.year}</p><h1 ref={reportHeading} tabIndex={-1}>{EXAMPLES.find((item) => item.ticker === result.ticker)?.name || result.ticker}</h1><p className="company-call-date">{callDate ? `Call held ${callDate}` : "Saved report"}</p></div></div>{result.research && <section className="financial-highlights" aria-label="Reported financials; select a metric to inspect its source">{result.research.financial_highlights.map((metric) => <button type="button" className="financial-highlight" key={metric.id} onClick={() => setSource(metric.citations[0])} aria-label={`${metric.label}: ${metric.value}. Inspect source`}><span>{metric.label}</span><strong className="financial-value">{metric.value}</strong><span className="metric-source" aria-hidden="true">↗</span></button>)}</section>}</div>
         <nav className="workspace-tabs" role="tablist" aria-label="Report views" onKeyDown={(event) => {
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
@@ -550,11 +555,11 @@ export default function App() {
         </nav>
         <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className="report-workspace">
           {reportView === "market" ? <MarketPanel result={result} /> : <>
-            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onUpgrade={() => handleSubmit(result, true)} marketPanel={reportView === "overview" ? <MarketPanel result={result} compact /> : null} /></div>
+            <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onViewChange={setReportView} onSource={setSource} onUpgrade={() => handleSubmit(result, true)} marketPanel={reportView === "overview" ? <MarketPanel result={result} compact /> : null} /></div>
           </>}
         </div>
-        <p className="report-note">Source matching checks quotations and numeric consistency. AI interpretations may still be unsupported; inspect the evidence and context.</p>
       </div>}
+      {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} onClose={() => setSource(undefined)} />}
     </main>
     <footer className="app-footer"><span>Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">defeatbeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span><a href="https://meherzad.tech" target="_blank" rel="noreferrer">Built by Meherzad Antia ↗</a></footer>
   </div>;
