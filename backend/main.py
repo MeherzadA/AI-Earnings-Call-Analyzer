@@ -72,6 +72,9 @@ class AnalyzeRequest(BaseModel):
     def normalize_ticker(cls, value):
         return value.strip().upper() if isinstance(value, str) else value
 
+EXAMPLE_PERIODS = {"AAPL": (2024, "1"), "NVDA": (2024, "4"), "PYPL": (2025, "4")}
+
+
 @app.get("/")
 def root():
     return {"message": "Earnings Analyzer API is running"}
@@ -164,7 +167,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
 
 @app.get("/examples")
 def examples(db: Session = Depends(get_db)):
-    periods = [("AAPL", 2024, "1"), ("NVDA", 2024, "4"), ("PYPL", 2025, "4")]
+    periods = [(ticker, *period) for ticker, period in EXAMPLE_PERIODS.items()]
     rows = db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(
         tuple_(models.Transcript.ticker, models.Transcript.year, models.Transcript.quarter).in_(periods)
     ).order_by(models.Analysis.id.desc()).all()
@@ -175,6 +178,16 @@ def examples(db: Session = Depends(get_db)):
             "quarter": int(transcript.quarter), "has_research": bool(analysis.research_json),
         })
     return {"examples": [found[key] for key in periods if key in found]}
+
+
+@app.get("/examples/{ticker}")
+def read_example(ticker: str, db: Session = Depends(get_db)):
+    ticker = ticker.upper()
+    period = EXAMPLE_PERIODS.get(ticker)
+    row = saved_report(db, ticker, *period) if period else None
+    if row is None:
+        raise HTTPException(status_code=404, detail="This saved example is unavailable. Please try another example or a saved report.")
+    return report_response(*row)
 
 
 # ponytail: one free Render process; use a distributed generation limit if scaled to multiple workers.

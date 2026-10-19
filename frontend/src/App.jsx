@@ -257,7 +257,7 @@ function MarketPanel({ result, compact = false }) {
   </section>;
 }
 
-function ExampleFeed({ examples, onSelect, loading, pending, error, onRetry }) {
+function ExampleFeed({ onSelect }) {
   const cards = [
     { ticker: "AAPL", name: "Apple", period: "Q1 2024", description: "Revenue, Services, and management’s outlook." },
     { ticker: "NVDA", name: "NVIDIA", period: "Q4 2024", description: "Growth, demand, and margin guidance." },
@@ -265,15 +265,10 @@ function ExampleFeed({ examples, onSelect, loading, pending, error, onRetry }) {
   ];
   return <section className="examples-section" aria-labelledby="examples-title">
     <div className="section-heading"><div><p className="eyebrow">START WITH A SAVED CALL</p><h2 id="examples-title">Explore the evidence yourself</h2></div><span>No generation needed</span></div>
-    {pending && <p className="section-description" role="status">Loading saved examples… The service may need a moment to wake up.</p>}
-    {error && <p className="history-notice" role="status">Saved examples aren't available right now. <button type="button" onClick={onRetry}>Try again</button></p>}
-    <div className="example-grid">{cards.map((card) => {
-      const report = examples.find((item) => item.ticker === card.ticker);
-      return <button type="button" className="example-card" key={card.ticker} disabled={loading || !report} onClick={() => onSelect(report)}>
+    <div className="example-grid">{cards.map((card) => <button type="button" className="example-card" key={card.ticker} onClick={() => onSelect(card.ticker)}>
         <span className="example-top"><span className="example-ticker">{card.ticker}</span><span>{card.period}</span></span>
-        <h3>{card.name}</h3><p>{card.description}</p><span className="example-action">{report ? "Open saved report" : pending ? "Loading saved example…" : "Example unavailable"} <span aria-hidden="true">↗</span></span>
-      </button>;
-    })}</div>
+        <h3>{card.name}</h3><p>{card.description}</p><span className="example-action">Open saved report <span aria-hidden="true">↗</span></span>
+      </button>)}</div>
   </section>;
 }
 
@@ -408,9 +403,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
-  const [examples, setExamples] = useState([]);
-  const [examplesLoading, setExamplesLoading] = useState(true);
-  const [examplesError, setExamplesError] = useState(false);
   const [sort, setSort] = useState("recent");
   const [limit, setLimit] = useState(20);
   const [total, setTotal] = useState(0);
@@ -454,11 +446,11 @@ export default function App() {
     setReportLocation(null, push);
   }
 
-  async function loadReport(id, push = true) {
+  async function loadReport(path, push = true) {
     const current = ++requestNumber.current;
     setError(""); setResult(null); setLoading("saved");
     try {
-      const data = await apiRequest(`/reports/${id}`);
+      const data = await apiRequest(path, { timeoutMs: 90000 });
       if (current !== requestNumber.current) return;
       setResult(data); setReportLocation(data.report_id, push);
     } catch (err) { if (current === requestNumber.current) setError(err.message); }
@@ -470,7 +462,7 @@ export default function App() {
       const id = reportIdFromSearch(window.location.search);
       // Fragment navigation must not reload the currently displayed report.
       if (id && id === displayedReport.current) return;
-      if (id) loadReport(id, false);
+      if (id) loadReport(`/reports/${id}`, false);
       else {
         const invalid = new URLSearchParams(window.location.search).has("report");
         goHome(false);
@@ -491,13 +483,6 @@ export default function App() {
     }).catch(() => { if (!cancelled) { setHistoryError("Saved reports aren't available right now."); setHistoryLoading(false); } });
     return () => { cancelled = true; };
   }, [sort, limit, refreshKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setExamplesLoading(true);
-    apiRequest("/examples", { timeoutMs: 90000 }).then((data) => { if (!cancelled) { setExamples(data.examples || []); setExamplesError(false); setExamplesLoading(false); } }).catch(() => { if (!cancelled) { setExamples([]); setExamplesError(true); setExamplesLoading(false); } });
-    return () => { cancelled = true; };
-  }, [refreshKey]);
 
   async function handleSubmit({ ticker, year, quarter }, keepPrevious = false) {
     const current = ++requestNumber.current;
@@ -534,13 +519,14 @@ export default function App() {
         {error && <div className="error-banner" role="alert">{error}</div>}
       </div>
       {!result && !loading && <>
-        <ExampleFeed examples={examples} loading={loading} pending={examplesLoading} error={examplesError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={(item) => loadReport(item.report_id)} />
-        <HistoryFeed history={history} onSelect={(item) => loadReport(item.report_id)} sort={sort} setSort={(value) => { setSort(value); setLimit(20); }} limit={limit} setLimit={setLimit} total={total} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} />
+        <ExampleFeed onSelect={(ticker) => loadReport(`/examples/${ticker}`)} />
+        <HistoryFeed history={history} onSelect={(item) => loadReport(`/reports/${item.report_id}`)} sort={sort} setSort={(value) => { setSort(value); setLimit(20); }} limit={limit} setLimit={setLimit} total={total} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} />
       </>}
       {loading && <div className="loading-state" role="status" aria-live="polite">
         <div className="loading-bar"><div className="loading-fill" /></div>
-        <p className="loading-text">{loading === "saved" ? "Opening the saved report…" : "Preparing your source-based report…"}<br/><span>{loading === "saved" ? "No new AI analysis is generated." : "Reading the transcript, generating findings, and checking source excerpts. The service may take a moment to wake up."}</span></p>
+        <p className="loading-text">{loading === "saved" ? "Opening the saved report…" : "Preparing your source-based report…"}<br/><span>{loading === "saved" ? "No new AI analysis is generated. The free server may need about a minute to wake up." : "Reading the transcript, generating findings, and checking source excerpts. The service may take a moment to wake up."}</span></p>
         <span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span>
+        {loading === "saved" && <button type="button" className="text-btn" onClick={() => goHome()}>Back to examples</button>}
       </div>}
       {result && <div className="results">
         <div className="report-actions"><button className="back-btn" type="button" onClick={() => goHome()}>← All reports</button><button type="button" className="outline-btn" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy report link ↗"}</button></div>
