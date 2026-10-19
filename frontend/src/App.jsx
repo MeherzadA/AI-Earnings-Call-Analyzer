@@ -221,7 +221,7 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
       {!loading && !error && !matches.length && <p className="landing-status">No matching reports. Search a company and fiscal period above to analyse a call.</p>}
       <footer className="landing-list-footer"><p>Historical returns from the call-day close. These are not live quotes.</p>{history.length < total && <button type="button" onClick={onMore} disabled={loading}>More reports</button>}</footer>
     </section>
-    <aside className="landing-preview" aria-label="Existing call preview" style={{"--chart-color":(preview?.return_5day || 0) < 0 ? "#ff8798" : "#78e5ad"}}>
+    <aside className="landing-preview" aria-label="Existing call preview">
       <div className="landing-section-heading"><h2>Call preview</h2>{featured && <button type="button" className="landing-open" onClick={() => onSelect(featured)}>Open report</button>}</div>
       {featured ? <><div className="landing-preview-company"><CompanyMark ticker={featured.ticker}/><div><h3>{COMPANIES[featured.ticker] || featured.ticker}</h3><p>{featured.ticker} · Q{featured.quarter} FY{featured.year}</p></div></div><time className="landing-preview-date" dateTime={featured.call_date || undefined}>{callDateLabel(featured.call_date)}</time>{preview ? <MarketPanel result={preview} compact/> : <p className="landing-status" role={previewError ? "alert" : "status"}>{previewError || "Loading the call’s price history…"}</p>}</> : <p className="landing-status">A report and its price history will appear here when the library loads.</p>}
     </aside>
