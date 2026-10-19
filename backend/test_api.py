@@ -88,6 +88,23 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(reopened["research"]["context"], first["context"])
             self.assertEqual(reopened["analysis"], report["analysis"])
 
+    def test_older_report_loads_context_without_upgrading_or_calling_ai(self):
+        with database.SessionLocal() as db:
+            transcript = main.models.Transcript(ticker="NVDA", year=2023, quarter="4", raw_text=SOURCE)
+            db.add(transcript); db.flush()
+            db.add(main.models.Analysis(transcript_id=transcript.id, summary="Keep original", key_claims="[]", red_flags="[]", opportunities="[]", daily_prices=json.dumps([{"date":"2023-02-22","price":20.73}])))
+            db.commit()
+        context = {"version": main.CONTEXT_VERSION, "call_date":"2023-02-22"}
+        with patch.object(main, "build_context", return_value=context) as provider, patch.object(main, "analyze_transcript") as ai:
+            self.assertEqual(self.client.post("/reports/1/context").status_code, 200)
+            self.assertTrue(self.client.post("/reports/1/context").json()["cached"])
+            report = self.client.get("/reports/1").json()
+            self.assertIsNone(report["research"])
+            self.assertEqual(report["context"], context)
+            self.assertEqual(report["analysis"]["summary"], "Keep original")
+            self.assertFalse(self.client.get("/history").json()["history"][0]["has_research"])
+            provider.assert_called_once(); ai.assert_not_called()
+
     def test_readonly_report_and_transcript_do_not_generate(self):
         with database.SessionLocal() as db:
             transcript = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text=SOURCE)

@@ -81,7 +81,7 @@ export function SourceViewer({ reportId, citation, expectedHash, playback, onClo
   </dialog>;
 }
 
-export default function ResearchReport({ result, onUpgrade, view = "overview", onSource, onPlayback }) {
+export default function ResearchReport({ result, view = "overview", onSource, onPlayback }) {
   const research = reportContent(result);
   const checked = Boolean(result.research);
   const [visibleCount, setVisibleCount] = useState(6);
@@ -92,17 +92,16 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
   const openSource = (citation = null) => onSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
-    {!checked && <p className="unchecked-status">Saved AI statements · Source checks unavailable. Read the transcript to assess them.</p>}
-      {view !== "overview" && <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>}
+      {(view === "findings" || view === "concerns") && <div className="report-intro"><span className="tone-tag">{checked ? "Source excerpts available" : "AI statements · Excerpts not recorded"}</span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>}
       {view === "overview" && <>
         <div className="workspace-overview">
-          <div className="call-source-row">
+          <div className={`call-source-row ${sourceQuote ? "" : "audio-only"}`}>
           <section className="call-panel" aria-labelledby="call-panel-title"><div className="panel-heading"><h2 id="call-panel-title">Call audio</h2><button type="button" className="player-transcript" onClick={() => openSource()}>▤ Full transcript →</button></div><CallReplay key={result.report_id} result={result} onPlayback={onPlayback} /></section>
-          {sourceQuote ? <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>Management’s words</h2><span>Source excerpt matched</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section> : <section className="source-quote transcript-access"><h2>The original call</h2><p>The complete saved transcript is available to read and listen to. These saved statements do not have matched source excerpts.</p><button type="button" onClick={() => openSource()}>Open full transcript →</button></section>}
+          {sourceQuote && <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>In management’s words</h2><span>Matched excerpt</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section>}
           </div>
           <section className="quarter-brief" aria-label="Key finding and concern">
             <div className="brief-takeaways">
-            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "↓" : "↑"}</span>{finding.category === "risks" ? "Concern to examine" : "Key finding"}</p><h3>{finding.headline}</h3>{finding.observation && <p>{finding.observation}</p>}<button type="button" onClick={() => openSource(finding.citations[0] || null)}>{checked ? "View source →" : "Read transcript →"}</button></article>)}
+            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "!" : "↗"}</span>{finding.category === "risks" ? "CONCERN / RISK" : "KEY DEVELOPMENT"}</p><h3>{finding.headline}</h3>{finding.observation && <p>{finding.observation}</p>}<button type="button" onClick={() => openSource(finding.citations[0] || null)}>{checked ? "Inspect evidence →" : "Read transcript →"}</button></article>)}
             {!concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
             </div>
           </section>
@@ -118,7 +117,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
-      {checked ? <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div> : view === "research" && <section className="research-unavailable"><h2>Source-linked research has not been generated</h2><p>You can read the saved transcript now. Generating a source-linked report uses one Gemini request and preserves the existing saved analysis.</p><button type="button" className="outline-btn" onClick={onUpgrade}>Analyze saved transcript with sources →</button></section>}
+      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div>
       <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
         <p>{checked ? "Every displayed citation was matched to the saved transcript; numeric values were compared with the cited text. These checks do not establish semantic support, independent truth, or complete risk coverage." : "These AI statements were stored without source checks. Their appearance in the current layout does not verify them. No citations have been invented or another analysis generated."}</p>
         <p>Human review: <strong>not performed</strong>. {checked && `${research.checks.discarded.length} proposed items were omitted by source checks.`}</p>

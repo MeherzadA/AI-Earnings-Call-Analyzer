@@ -54,6 +54,21 @@ def revenue_highlight(research):
     return None
 
 
+def transcript_revenue(text):
+    """Literal fallback for older reports: require explicit company/quarter scope, never infer a value."""
+    for passage in source_passages(text):
+        for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z])", passage["text"]):
+            if re.search(r"\b(?:expect|forecast|guidance|annual|full year|segment|services|gaming|data center|cloud)\b", sentence, re.I):
+                continue
+            match = re.search(r"\b(?:total (?:company )?revenue(?: for (?:the|this|our) quarter)?|quarterly revenue|revenue for (?:the|this|our|the fourth|the third|the second|the first) quarter)\s+(?:was|were|of|reached|totaled|came in at)\s+(?:a record |record )?\$(\d[\d,.]*)\s*(billion|million)\b", sentence, re.I)
+            if not match:
+                continue
+            value = re.search(r"\$\d[\d,.]*\s*(?:billion|million)", match[0], re.I)[0]
+            start = passage["start"] + passage["text"].index(sentence)
+            return {"label": "Quarterly revenue", "value": value, "citations": [{"passage_id": passage["id"], "quote": sentence, "start": start, "end": start + len(sentence)}]}
+    return None
+
+
 def prior_outlook(text, quarter, period_terms=()):
     """Extract explicit revenue expectations; leave ambiguous periods unscored."""
     results = []

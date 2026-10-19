@@ -40,7 +40,7 @@ from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
-from context import build_context, CONTEXT_VERSION
+from context import build_context, CONTEXT_VERSION, transcript_revenue
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -99,8 +99,14 @@ def saved_report(db, ticker, year, quarter):
     ).order_by(models.Analysis.id.desc()).first()
 
 
+def stored_research(analysis):
+    document = json.loads(analysis.research_json) if analysis.research_json else {}
+    return document if "findings" in document else None
+
+
 def report_response(transcript, analysis, cached=True):
-    research = json.loads(analysis.research_json) if analysis.research_json else None
+    document = json.loads(analysis.research_json) if analysis.research_json else {}
+    research = stored_research(analysis)
     if research and research["source_hash"] != source_hash(transcript.raw_text):
         raise HTTPException(status_code=503, detail="This saved report no longer matches its transcript. Please run a new analysis.")
     result = legacy_analysis(research) if research else {
@@ -109,11 +115,12 @@ def report_response(transcript, analysis, cached=True):
         "red_flags": json.loads(analysis.red_flags or "[]"), "opportunities": json.loads(analysis.opportunities or "[]"),
     }
     prices = json.loads(analysis.daily_prices or "[]")
-    call_date = (research or {}).get("call_date") or (prices[0]["date"] if prices else None)
+    call_date = document.get("call_date") or (prices[0]["date"] if prices else None)
     ensure_past_call(call_date)
     return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
             "quarter": int(transcript.quarter), "analysis": result, "research": research,
             "call_date": call_date, "daily_prices": prices,
+            "context": document.get("context") if document.get("source_hash") == source_hash(transcript.raw_text) else None,
             "return_1day": analysis.return_1day, "return_5day": analysis.return_5day, "cached": cached}
 
 
@@ -146,28 +153,35 @@ def read_transcript(report_id: int, db: Session = Depends(get_db)):
 @app.post("/reports/{report_id}/context")
 def load_context(report_id: int, db: Session = Depends(get_db)):
     transcript, analysis = report_by_id(db, report_id)
-    research = report_response(transcript, analysis)["research"]
-    if not research:
-        raise HTTPException(status_code=409, detail="Build a source-based report before loading comparison context.")
-    if research.get("context", {}).get("version") == CONTEXT_VERSION:
-        return {"context": research["context"], "cached": True}
+    report_response(transcript, analysis)  # Validate stored source and actual call date.
+    document = json.loads(analysis.research_json) if analysis.research_json else {}
+    if document.get("source_hash") == source_hash(transcript.raw_text) and document.get("context", {}).get("version") == CONTEXT_VERSION:
+        return {"context": document["context"], "cached": True}
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
     try:
         db.refresh(analysis)
-        research = json.loads(analysis.research_json)
+        research = json.loads(analysis.research_json) if analysis.research_json else {}
+        if research.get("source_hash") not in (None, source_hash(transcript.raw_text)):
+            research = {}
         if research.get("context", {}).get("version") == CONTEXT_VERSION:
             return {"context": research["context"], "cached": True}
         previous_year, previous_quarter = (transcript.year, int(transcript.quarter) - 1) if int(transcript.quarter) > 1 else (transcript.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
         prices = json.loads(analysis.daily_prices or "[]")
         call_date = research.get("call_date") or (prices[0]["date"] if prices else None)
+        context_source = {**research}
+        if not context_source.get("financial_highlights"):
+            revenue = transcript_revenue(transcript.raw_text)
+            context_source["financial_highlights"] = [revenue] if revenue else []
         try:
-            context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), research, call_date,
+            context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), context_source, call_date,
                                     {"content": previous.raw_text} if previous else None)
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         research["context"] = context
+        research["call_date"] = context["call_date"]
+        research["source_hash"] = source_hash(transcript.raw_text)
         analysis.research_json = json.dumps(research)
         db.commit()
         return {"context": context, "cached": False}
@@ -185,7 +199,7 @@ def examples(db: Session = Depends(get_db)):
     for transcript, analysis in rows:
         found.setdefault((transcript.ticker, transcript.year, transcript.quarter), {
             "report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
-            "quarter": int(transcript.quarter), "has_research": bool(analysis.research_json),
+            "quarter": int(transcript.quarter), "has_research": bool(stored_research(analysis)),
         })
     return {"examples": [found[key] for key in periods if key in found]}
 
@@ -207,8 +221,8 @@ generation_lock = Lock()
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     existing = saved_report(db, request.ticker, request.year, request.quarter)
-    if existing and existing[1].research_json:
-        stored = json.loads(existing[1].research_json)
+    if existing and stored_research(existing[1]):
+        stored = stored_research(existing[1])
         if stored["source_hash"] == source_hash(existing[0].raw_text) or not request.with_research:
             return report_response(*existing)
     if existing and not request.with_research:
@@ -280,7 +294,8 @@ def get_history(
     total = query.count()
     results = []
     for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all():
-        research = json.loads(analysis.research_json) if analysis.research_json else None
+        document = json.loads(analysis.research_json) if analysis.research_json else {}
+        research = stored_research(analysis)
         prices = json.loads(analysis.daily_prices or "[]")
         display = legacy_analysis(research) if research else {
             "sentiment": analysis.sentiment, "sentiment_score": analysis.sentiment_score,
@@ -288,11 +303,11 @@ def get_history(
         }
         results.append({
             "report_id": analysis.id,
-            "has_research": bool(analysis.research_json),
+            "has_research": bool(research),
             "ticker": t.ticker,
             "year": t.year,
             "quarter": t.quarter,
-            "call_date": (research or {}).get("call_date") or (prices[0]["date"] if prices else None),
+            "call_date": document.get("call_date") or (prices[0]["date"] if prices else None),
             **{key: display[key] for key in ("sentiment", "sentiment_score", "summary")},
             "return_1day": analysis.return_1day,
             "return_5day": analysis.return_5day,

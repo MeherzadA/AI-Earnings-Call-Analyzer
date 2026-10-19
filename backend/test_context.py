@@ -2,10 +2,19 @@ from decimal import Decimal
 import unittest
 from unittest.mock import patch
 
-from context import prior_outlook, compare_outlook, revenue_highlight, dated_news
+from context import prior_outlook, compare_outlook, revenue_highlight, dated_news, transcript_revenue
 
 
 class ContextChecks(unittest.TestCase):
+    def test_literal_revenue_fallback_preserves_its_source_and_rejects_wrong_scope(self):
+        text = "Hello. Total revenue was $6.05 billion, down from a year ago."
+        item = transcript_revenue(text)
+        self.assertEqual(item["value"], "$6.05 billion")
+        citation = item["citations"][0]
+        self.assertEqual(text[citation["start"]:citation["end"]], citation["quote"])
+        for text in ("Total revenue was lower than $8 billion last year.", "Gaming total revenue was $2 billion.", "We expect total revenue was $6 billion."):
+            self.assertIsNone(transcript_revenue(text))
+
     def test_worded_outlook_connects_to_the_same_quarter_reported_growth(self):
         quote = "Today, Apple is reporting revenue of $119.6 billion for the December quarter, up 2% from a year ago despite having one less week in the quarter."
         actual = revenue_highlight({"financial_highlights": [{"label": "Total Revenue", "value": "$119.6 billion", "citations": [{"quote": quote}]}]})
