@@ -7,7 +7,7 @@ import { reportContent } from "./reportPresentation.js";
 const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Concerns & risks", opportunities: "Opportunities" };
 
 function Evidence({ citations, onSource }) {
-  if (!citations.length) return <div className="unlinked-evidence"><span>Source excerpts not saved for this statement.</span><button type="button" onClick={() => onSource(null)}>Read full transcript →</button></div>;
+  if (!citations.length) return null;
   return <details className="finding-evidence">
     <summary>View evidence <span>{citations.length} source {citations.length === 1 ? "passage" : "passages"}</span></summary>
     {citations.map((citation, i) => <div className="evidence-excerpt" key={i}>

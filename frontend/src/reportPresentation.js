@@ -3,17 +3,12 @@ export function callDateLabel(date) {
   return new Date(`${date.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-// Adapt stored statements to the current UI without inventing citations or generating a new report.
+// Display only findings that carry their supporting source excerpts.
 export function reportContent(result) {
-  if (result.research) return result.research;
-  const analysis = result.analysis || {};
-  return {
-    management_tone: analysis.sentiment || "unavailable", financial_highlights: [],
-    findings: [["performance", analysis.key_claims], ["risks", analysis.red_flags], ["opportunities", analysis.opportunities]].flatMap(([category, items]) => (items || []).map((text, index) => {
-      const firstSentence = text.match(/^.+?[.!?](?:\s|$)/)?.[0]?.trim() || text;
-      const headline = firstSentence.length > 140 ? `${firstSentence.slice(0, 137).trimEnd()}…` : firstSentence;
-      return { id: `${category}-${index}`, category, headline, observation: headline === text ? "" : text, interpretation: null, citations: [] };
-    })),
+  const research = result.research || { management_tone: "unavailable", findings: [], financial_highlights: [] };
+  return { ...research,
+    findings: research.findings.filter((item) => item.citations?.length),
+    financial_highlights: research.financial_highlights.filter((item) => item.citations?.length),
   };
 }
 
