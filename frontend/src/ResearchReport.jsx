@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import ResearchContext from "./ResearchContext.jsx";
 import CallReplay from "./CallReplay.jsx";
+import { reportContent } from "./reportPresentation.js";
 
 const SUBJECTS = { performance: "Performance", guidance: "Management guidance", risks: "Concerns & risks", opportunities: "Opportunities" };
 
 function Evidence({ citations, onSource }) {
+  if (!citations.length) return <div className="unlinked-evidence"><span>Source excerpts not saved for this statement.</span><button type="button" onClick={() => onSource(null)}>Read full transcript →</button></div>;
   return <details className="finding-evidence">
     <summary>View evidence <span>{citations.length} source {citations.length === 1 ? "passage" : "passages"}</span></summary>
     {citations.map((citation, i) => <div className="evidence-excerpt" key={i}>
@@ -23,7 +25,7 @@ function FindingCard({ finding, index, onSource }) {
       <p className="finding-subject">{SUBJECTS[finding.category]}</p>
       <h3>{finding.headline}</h3>
       <div className="finding-columns">
-        <div><h4>AI observation</h4><p>{finding.observation}</p></div>
+        {finding.observation && <div><h4>AI observation</h4><p>{finding.observation}</p></div>}
         {finding.interpretation && <div className="finding-interpretation"><h4>AI interpretation</h4><p>{finding.interpretation}</p></div>}
       </div>
       <Evidence citations={finding.citations} onSource={onSource} />
@@ -80,49 +82,49 @@ export function SourceViewer({ reportId, citation, expectedHash, playback, onClo
 }
 
 export default function ResearchReport({ result, onUpgrade, view = "overview", onSource, onPlayback }) {
-  const research = result.research;
+  const research = reportContent(result);
+  const checked = Boolean(result.research);
+  const [visibleCount, setVisibleCount] = useState(6);
+  useEffect(() => setVisibleCount(6), [view]);
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
   const sourceQuote = (developments[0] || concerns[0])?.citations[0];
   const openSource = (citation = null) => onSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
-    {research ? <>
+    {!checked && <p className="unchecked-status">Saved AI statements · Source checks unavailable. Read the transcript to assess them.</p>}
       {view !== "overview" && <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>}
       {view === "overview" && <>
         <div className="workspace-overview">
+          <div className="call-source-row">
           <section className="call-panel" aria-labelledby="call-panel-title"><div className="panel-heading"><h2 id="call-panel-title">Call audio</h2><button type="button" className="player-transcript" onClick={() => openSource()}>▤ Full transcript →</button></div><CallReplay key={result.report_id} result={result} onPlayback={onPlayback} /></section>
+          {sourceQuote ? <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>Management’s words</h2><span>Source excerpt matched</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section> : <section className="source-quote transcript-access"><h2>The original call</h2><p>The complete saved transcript is available to read and listen to. These saved statements do not have matched source excerpts.</p><button type="button" onClick={() => openSource()}>Open full transcript →</button></section>}
+          </div>
           <section className="quarter-brief" aria-label="Key finding and concern">
             <div className="brief-takeaways">
-            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "↓" : "↑"}</span>{finding.category === "risks" ? "Concern to examine" : "Key finding"}</p><h3>{finding.headline}</h3><p>{finding.observation}</p><button type="button" onClick={() => openSource(finding.citations[0])}>View source →</button></article>)}
+            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "↓" : "↑"}</span>{finding.category === "risks" ? "Concern to examine" : "Key finding"}</p><h3>{finding.headline}</h3>{finding.observation && <p>{finding.observation}</p>}<button type="button" onClick={() => openSource(finding.citations[0] || null)}>{checked ? "View source →" : "Read transcript →"}</button></article>)}
             {!concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
             </div>
           </section>
-          {sourceQuote && <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>Management’s words</h2><span>Source excerpt matched</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section>}
         </div>
         <p className="source-scope">The brief uses management’s transcript. Management tone: {research.management_tone} (AI assessment). {concerns.length ? "" : emptyConcern}</p>
       </>}
       {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
         <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
-        <p className="section-description">AI-written observations and interpretations, with their source evidence. Guidance describes management’s expectations.</p>
-        {view === "findings" && <details className="all-financials"><summary>Financial highlights from the call</summary><div className="all-financials-grid">{research.financial_highlights.map((metric) => <article key={metric.id}><p>{metric.label}</p><strong>{metric.value}</strong><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></details>}
-        <div className="findings-grid">{(view === "concerns" ? concerns : developments).map((finding, index) => <FindingCard key={finding.id} finding={finding} index={index} onSource={openSource} />)}</div>
+        <p className="section-description">{checked ? "AI-written observations and interpretations with matched source excerpts." : "Previously saved AI statements, presented as individual cards. Source checks were not recorded."} Guidance describes management’s expectations.</p>
+        {view === "findings" && research.financial_highlights.length > 0 && <details className="all-financials"><summary>Financial highlights from the call</summary><div className="all-financials-grid">{research.financial_highlights.map((metric) => <article key={metric.id}><p>{metric.label}</p><strong>{metric.value}</strong><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></details>}
+        <div className="findings-grid">{(view === "concerns" ? concerns : developments).slice(0, visibleCount).map((finding, index) => <FindingCard key={finding.id} finding={finding} index={index} onSource={openSource} />)}</div>
+        {(view === "concerns" ? concerns : developments).length > visibleCount && <button type="button" className="outline-btn" onClick={() => setVisibleCount((count) => count + 6)}>Show more findings</button>}
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
-      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div>
+      {checked ? <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div> : view === "research" && <section className="research-unavailable"><h2>Source-linked research has not been generated</h2><p>You can read the saved transcript now. Generating a source-linked report uses one Gemini request and preserves the existing saved analysis.</p><button type="button" className="outline-btn" onClick={onUpgrade}>Analyze saved transcript with sources →</button></section>}
       <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
-        <p>Business findings use the call transcript. Every displayed citation was matched to that source; numeric values were compared with the cited text. This does not establish semantic support, independent truth, or complete risk coverage. Research context is separate and is not fed into a second AI report.</p>
-        <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length} proposed items were omitted by source checks.</p>
+        <p>{checked ? "Every displayed citation was matched to the saved transcript; numeric values were compared with the cited text. These checks do not establish semantic support, independent truth, or complete risk coverage." : "These AI statements were stored without source checks. Their appearance in the current layout does not verify them. No citations have been invented or another analysis generated."}</p>
+        <p>Human review: <strong>not performed</strong>. {checked && `${research.checks.discarded.length} proposed items were omitted by source checks.`}</p>
         {research.curation && <p>Selected example statements received development-time AI review. {research.curation.changes.filter((change) => change.field === "interpretation" && change.action === "removed").length} unsupported interpretations were removed. Concern categories may also be curated. <a href="/review.html">Inspect original drafts and assessments ↗</a></p>}
-        <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>
+        {checked && <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>}
         <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method & limitations ↗</a>
       </details>
-    </> : <section className="legacy-report">
-      <section className="call-panel"><div className="panel-heading"><h2>Call audio</h2><button type="button" className="player-transcript" onClick={() => openSource()}>▤ Full transcript →</button></div><CallReplay key={result.report_id} result={result} onPlayback={onPlayback} /></section>
-      <div className="legacy-notice"><div><h2>This is an earlier report</h2><p>Source checks are unavailable. A new brief can use the saved transcript; the original is retained.</p></div><button className="outline-btn" type="button" onClick={onUpgrade}>Build source-based report ↗</button></div>
-      <div className="card legacy-summary"><p className="card-label">Earlier AI summary</p><p>{result.analysis.summary}</p><button type="button" className="text-btn" onClick={() => openSource()}>Read the saved transcript ↗</button></div>
-      {[["Key claims", result.analysis.key_claims], ["Risks", result.analysis.red_flags], ["Opportunities", result.analysis.opportunities]].map(([title, items]) => <details className="legacy-list" key={title}><summary>{title} <span>{items?.length || 0}</span></summary><ul>{items?.map((item, i) => <li key={i}>{item}</li>)}</ul>{!items?.length && <p>None listed.</p>}</details>)}
-    </section>}
   </>;
 }

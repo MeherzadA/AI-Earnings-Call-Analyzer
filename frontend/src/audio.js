@@ -12,6 +12,12 @@ export function audioTime(seconds) {
   return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
 }
 
+export function preferredVoice(voices) {
+  const english = voices.filter((voice) => /^en(?:-|$)/i.test(voice.lang));
+  const score = (voice) => (/natural|neural|enhanced|premium/i.test(voice.name) ? 100 : /Google/i.test(voice.name) ? 50 : 0) + (voice.default ? 5 : 0);
+  return english.sort((a, b) => score(b) - score(a))[0] || null;
+}
+
 export function speechSections(passages) {
   return passages.flatMap((passage) => {
     const sections = [];

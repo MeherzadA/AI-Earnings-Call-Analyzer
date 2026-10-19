@@ -456,15 +456,6 @@ mark { background: #f3dda0; color: var(--ink); padding: 1px 0; }
 .source-passage h3 { padding-top: 5px; color: var(--accent); font: 10px var(--font-mono); }
 .source-passage p { font-size: 14px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .source-selected { background: #f6f0df; }
-.legacy-report { display: flex; flex-direction: column; gap: 17px; }
-.legacy-notice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 17px; padding: 22px; border: 1px solid #d8c49b; background: #f6eedc; }
-.legacy-notice h2 { font: 25px var(--serif); margin-bottom: 9px; }
-.legacy-notice p { max-width: 640px; color: var(--ink-2); font-size: 13px; line-height: 1.7; }
-.legacy-summary > p:not(.card-label) { font-size: 15px; line-height: 1.85; color: var(--ink-2); margin-top: 15px; }
-.legacy-list { padding: 0 22px; border: 1px solid var(--border); background: var(--surface); }
-.legacy-list summary { cursor: pointer; min-height: 48px; padding: 16px 0; font-size: 14px; }
-.legacy-list summary > span { margin-left: 9px; color: var(--ink-3); font: 11px var(--font-mono); }
-.legacy-list li, .legacy-list > p { font-size: 14px; line-height: 1.85; color: var(--ink-2); margin-bottom: 14px; }
 .share-fallback { font-size: 12px; line-height: 1.8; color: var(--ink-3); overflow-wrap: anywhere; }
 .app-footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; width: calc(100% - 48px); max-width: 1280px; margin: auto; padding: 22px 0; border-top: 1px solid var(--border-strong); color: var(--ink-3); font: 10px/1.8 var(--font-mono); }
 .app-footer a { text-decoration: none; }

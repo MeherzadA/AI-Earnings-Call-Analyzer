@@ -9,10 +9,3 @@ export function reportUrl(base, id) {
   url.hash = "";
   return url.toString();
 }
-
-export function nextSavedReport(reports, currentId, step = 1) {
-  if (!reports.length) return null;
-  const index = reports.findIndex((item) => item.report_id === currentId);
-  if (index < 0) return reports[step < 0 ? reports.length - 1 : 0];
-  return reports[(index + step + reports.length) % reports.length];
-}

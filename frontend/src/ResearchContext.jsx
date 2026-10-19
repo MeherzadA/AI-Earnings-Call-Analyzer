@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
+import { marketWindow, callDateLabel } from "./reportPresentation.js";
 
 function QuoteContext({ outlook }) {
   const text = outlook.context || outlook.quote, start = text.indexOf(outlook.quote);
@@ -37,7 +38,7 @@ export default function ResearchContext({ result, onSource, active, onLoaded }) 
     {!context && !error && <div className="context-load card" role="status"><h3>Loading the earlier outlook…</h3><p>This loads automatically when you open this view and is then saved. No additional Gemini call.</p></div>}
     {error && <div className="error-banner" role="alert"><p>{error}</p><button type="button" className="text-btn" disabled={loading} onClick={load}>Retry loading context</button></div>}
     {context && <>
-      <p className="context-stamp">Call date: {context.call_date} · Saved {new Date(context.loaded_at).toLocaleDateString()} · No additional AI generation</p>
+      <p className="context-stamp">Call held <strong>{callDateLabel(context.call_date)}</strong> · Fiscal Q{result.quarter} {result.year}</p>
       <section className="context-card card" aria-labelledby="outlook-title">
         <p className="guidance-connection">Expected {targetPeriod} <span aria-hidden="true">→</span> Actual {targetPeriod}<span>Forecast made during the Q{context.previous_call.quarter} FY{context.previous_call.year} call.{comparison.status === "directional" && ` Both sides compare ${targetPeriod} with ${baselinePeriod}.`}</span></p>
         <div className="context-card-heading"><h3 id="outlook-title">{comparison.headline}</h3><span className="context-status">{comparison.status === "directional" ? "Direction only · no exact target" : comparison.status === "compared" ? "Compared with management’s target" : "Not enough matching evidence"}</span></div>
@@ -60,6 +61,7 @@ export default function ResearchContext({ result, onSource, active, onLoaded }) 
           <p className="context-limit">Select filings for this fiscal period when browsing. A source link is not a completed cross-check. Filing figures may use more precision than the call.</p>
         </section>}
         <section className="context-card coverage-card card" aria-labelledby="news-title"><div className="context-card-heading"><h3 id="news-title">Related coverage</h3><span className="context-status">Headline links · Articles not analysed</span></div>
+          <div className="news-window-note"><h4>Why a headline can say “rose” while the chart falls</h4><p>A headline may describe after-hours trading or an intraday rise. Our chart compares regular-session closing prices on different days.</p><p>{marketWindow(result)}</p><p>The feed does not identify each article’s price window; we have not verified that window from the article text.</p></div>
           {context.news.start && <p>Published {context.news.start} – {context.news.end} (UTC). These links are further reading, not article summaries or verified evidence for the brief.</p>}
           <ul className="news-list">{context.news.items?.map((item, i) => <li key={i}><p>{item.source} · {item.published_at.slice(0, 10)}</p><a href={item.url} target="_blank" rel="noreferrer">{item.title} ↗</a></li>)}</ul>
           {!context.news.items?.length && <p className="context-notice">{context.news.message || "No matching dated headlines were returned. Feed coverage is incomplete."}</p>}

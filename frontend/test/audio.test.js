@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { audioTime, callAudioUrl, speechSections } from "../src/audio.js";
+import { audioTime, callAudioUrl, speechSections, preferredVoice } from "../src/audio.js";
 
 test("audio uses the requested fiscal period and only the free provider's supported companies", () => {
   const url = new URL(callAudioUrl({ ticker: "AAPL", year: 2024, quarter: 1 }));
@@ -11,6 +11,8 @@ test("audio uses the requested fiscal period and only the free provider's suppor
   assert.equal(callAudioUrl({ ticker: "NVDA", year: 2024, quarter: 4 }), null);
   assert.equal(audioTime(3665), "1:01:05");
   assert.equal(audioTime(NaN), "0:00");
+  assert.equal(preferredVoice([{ name:"David",lang:"en-US" },{ name:"Aria Natural",lang:"en-US" },{ name:"Premium",lang:"fr-FR" }]).name, "Aria Natural");
+  assert.equal(preferredVoice([]), null);
 });
 
 test("read-aloud preserves transcript words and passage identity in short sections", () => {

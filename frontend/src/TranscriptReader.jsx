@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
-import { speechSections } from "./audio.js";
+import { speechSections, preferredVoice } from "./audio.js";
 
 export default function TranscriptReader({ result, reason, onRecording, onPlayback, onTranscript }) {
   const [status, setStatus] = useState("idle");
@@ -8,12 +8,26 @@ export default function TranscriptReader({ result, reason, onRecording, onPlayba
   const [index, setIndex] = useState(0);
   const [error, setError] = useState("");
   const [cursor, setCursor] = useState(null);
+  const [voices, setVoices] = useState([]);
+  const [voiceURI, setVoiceURI] = useState("");
   const session = useRef(0);
   const mounted = useRef(true);
   const rate = useRef(1);
   const utterance = useRef(null);
   const startTimer = useRef(null);
   const supported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+
+  useEffect(() => {
+    if (!supported) return;
+    function loadVoices() {
+      const available = window.speechSynthesis.getVoices().filter((voice) => /^en(?:-|$)/i.test(voice.lang));
+      setVoices(available);
+      setVoiceURI((current) => available.some((voice) => voice.voiceURI === current) ? current : preferredVoice(available)?.voiceURI || "");
+    }
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+  }, [supported]);
 
   function stop() {
     session.current += 1;
@@ -42,7 +56,7 @@ export default function TranscriptReader({ result, reason, onRecording, onPlayba
     speech.lang = "en-US";
     speech.rate = rate.current;
     const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find((item) => item.localService && item.lang.startsWith("en")) || voices.find((item) => item.lang.startsWith("en"));
+    const voice = voices.find((item) => item.voiceURI === voiceURI) || preferredVoice(voices);
     if (voice) speech.voice = voice;
     utterance.current = speech;
     setIndex(at); setCursor(null); setStatus("loading"); setError("");
@@ -106,7 +120,7 @@ export default function TranscriptReader({ result, reason, onRecording, onPlayba
   }
 
   return <div className="call-replay transcript-reader">
-    <p className="reader-disclosure"><strong>Computer-read transcript</strong> · Not the executives’ voices. <span>{reason || "No original recording from our connected source."}</span></p>
+    <p className="reader-disclosure"><strong>Transcript read-aloud</strong> · Computer voice</p>
     {supported ? <div className={`audio-player ${status === "speaking" ? "reader-playing" : ""}`}>
       <div className="audio-status"><span>{status === "loading" ? "Preparing read-aloud…" : status === "speaking" ? "Reading the transcript" : status === "paused" ? "Read-aloud paused" : status === "ended" ? "Transcript finished" : "Listen to the saved transcript"}</span><span>{sections[index]?.passageId || `Q${result.quarter} FY${result.year}`}</span></div>
       <div className="reader-activity" aria-hidden="true">{Array.from({ length: 36 }, (_, i) => <i key={i} style={{ "--bar": `${10 + (i * 17 % 39)}px`, "--delay": `${i * -0.07}s` }} />)}</div>
@@ -123,6 +137,6 @@ export default function TranscriptReader({ result, reason, onRecording, onPlayba
     </div> : <p className="audio-error">This browser has no speech read-aloud support. The transcript remains available to read.</p>}
     {error && <p className="audio-error" role="alert">{error}</p>}
     {(onTranscript || onRecording) && <div className="player-footer">{onTranscript && <button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript & follow along →</button>}{onRecording && <button type="button" className="text-btn" onClick={onRecording}>Try original recording</button>}</div>}
-    <p className="replay-credit">Browser voice · Animation indicates reading activity. Transcript highlighting follows the spoken section; word tracking depends on your browser.</p>
+    <details className="voice-options"><summary>Voice & playback details</summary><label htmlFor="reader-voice">Reading voice</label><select id="reader-voice" value={voiceURI} disabled={!voices.length || status === "loading"} onChange={(event) => { stop(); setStatus("idle"); setVoiceURI(event.target.value); }}>{!voices.length && <option value="">Browser default</option>}{voices.map((voice) => <option key={voice.voiceURI} value={voice.voiceURI}>{voice.name} ({voice.lang})</option>)}</select><p>Uses voices available in your browser; natural or enhanced voices are preferred when available. Quality varies by device. {reason || "No original recording from our connected source."} This is not the executives’ audio. The animation indicates reading activity.</p></details>
   </div>;
 }
