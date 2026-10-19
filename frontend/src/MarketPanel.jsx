@@ -32,7 +32,7 @@ export default function MarketPanel({ result, compact = false, onExplore }) {
   const color = (points.at(-1)?.change || 0) < 0 ? "#ce4052" : "#078267";
   const value = mode === "change" ? "change" : "price";
   return <section className={`market-panel market-v2 ${compact ? "market-panel-compact" : ""}`} aria-label="Price action after the call">
-    <header className="market-v2-heading">{!compact && <span className="market-ticker">{result.ticker}</span>}<div><p className="section-kicker">{compact ? "AFTER EARNINGS" : "MARKET REPLAY"}</p><h2>{compact ? "Price action" : "The market’s next move."}</h2>{!compact && first && <p className="market-date-range">{callDateLabel(first.date)} → {callDateLabel(points.at(-1).date)}</p>}</div><span className="market-unit">Regular closes · USD</span></header>
+    <header className="market-v2-heading"><div><h2>Share price{!compact && <span className="market-ticker">{result.ticker}</span>}</h2>{!compact && first && <p className="market-date-range">{callDateLabel(first.date)} – {callDateLabel(points.at(-1).date)}</p>}</div><span className="market-unit">Daily close · USD</span></header>
     {!all.length ? <p className="market-empty">Closing prices aren’t available for this call. The transcript and report remain available.</p> : <>
       <div className="market-summary">
         <div className={tone(next?.change)}><span>Next trading day</span><strong className={tone(next?.change)}>{signed(next?.change)}</strong><small>{next ? callDateLabel(next.date) : "Not available"}</small></div>
@@ -59,7 +59,7 @@ export default function MarketPanel({ result, compact = false, onExplore }) {
       <div className="market-baseline"><span>Baseline · {callDateLabel(first.date)} close</span><strong>${first.price.toFixed(2)}</strong></div>
       {!compact && <><p className="market-explanation">Every return starts at the same call-day close. One month means 21 trading sessions; the longer window can include unrelated company and market news. Daily closes do not show after-hours or intraday moves, or establish what caused a price change.</p><section className="daily-closes"><h3>Daily closes · selected window</h3><div className="daily-closes-scroll"><table><thead><tr><th>Session</th><th>Date</th><th>Close</th><th>From baseline</th></tr></thead><tbody>{points.map((point) => <tr key={point.date}><th scope="row">{point.session}</th><td>{point.date}</td><td>${point.price.toFixed(2)}</td><td className={tone(point.change)}>{signed(point.change)}</td></tr>)}</tbody></table></div></section></>}
       <p className="price-provider">Source: Yahoo Finance · {compact ? "Regular daily closes" : "Prices rounded to cents; intermediate and monthly returns use displayed closes. Stored 1-day and 5-day returns may use provider precision."}</p>
-      {compact && onExplore && <button type="button" className="market-explore" onClick={onExplore}>Explore price action →</button>}
+      {compact && onExplore && <button type="button" className="market-explore" onClick={onExplore}>View price history</button>}
     </>}
   </section>;
 }
