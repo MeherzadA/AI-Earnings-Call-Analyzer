@@ -193,6 +193,41 @@ function CallLibrary({ history, total, sort, onSort, loading, error, onRetry, on
   </div>;
 }
 
+const returnLabel = (value) => value == null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+const returnTone = (value) => value > 0 ? "gain" : value < 0 ? "loss" : "";
+
+function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, onSelect, onMore }) {
+  const [query, setQuery] = useState("");
+  const [featured, setFeatured] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [previewError, setPreviewError] = useState("");
+  useEffect(() => {
+    if (!featured && history.length) setFeatured(history[Math.floor(Math.random() * history.length)]);
+  }, [history, featured]);
+  useEffect(() => {
+    if (!featured) return;
+    let cancelled = false;
+    apiRequest(`/reports/${featured.report_id}`).then((data) => { if (!cancelled) setPreview(data); }).catch(() => { if (!cancelled) setPreviewError("The preview could not be loaded. You can still try opening the report."); });
+    return () => { cancelled = true; };
+  }, [featured?.report_id]);
+  const matches = history.filter((item) => `${item.ticker} ${COMPANIES[item.ticker] || ""} ${item.year} Q${item.quarter} ${callDateLabel(item.call_date)}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="landing-board">
+    <section className="landing-reports" aria-labelledby="landing-reports-title">
+      <div className="landing-section-heading"><h2 id="landing-reports-title">Reports <span>{total}</span></h2><div className="landing-sort" role="group" aria-label="Sort reports"><button type="button" aria-pressed={sort === "recent"} onClick={() => onSort("recent")}>Recently added</button><button type="button" aria-pressed={sort === "movers"} onClick={() => onSort("movers")}>Largest 1-day move</button></div></div>
+      <label className="sr-only" htmlFor="landing-filter">Filter reports by company, date or fiscal period</label><input id="landing-filter" className="landing-filter" placeholder="Filter by company, date or fiscal year" value={query} onChange={(event) => setQuery(event.target.value)} />
+      {loading && <p className="landing-status" role="status">Loading reports…</p>}
+      {error && <p className="landing-status" role="alert">{error} <button type="button" onClick={onRetry}>Retry</button></p>}
+      <div className="landing-table-scroll"><table className="landing-table"><caption className="sr-only">Historical call reports. Returns are measured from the call-day close. Select a company to open its report.</caption><thead><tr><th>Company</th><th>Call date</th><th>Fiscal period</th><th>1 day</th><th>5 days</th></tr></thead><tbody>{matches.map((item) => <tr key={item.report_id}><th scope="row"><button type="button" className="landing-company" onClick={() => onSelect(item)} aria-label={`Open ${item.ticker} report, ${callDateLabel(item.call_date)}, Q${item.quarter} FY${item.year}`}><CompanyMark ticker={item.ticker}/><span><strong>{item.ticker}</strong><small>{COMPANIES[item.ticker] || item.ticker}</small><span className="landing-mobile-period">Q{item.quarter} FY{item.year}</span></span></button></th><td><time dateTime={item.call_date || undefined}>{callDateLabel(item.call_date)}</time></td><td>Q{item.quarter} <span>FY{item.year}</span></td><td className={returnTone(item.return_1day)}>{returnLabel(item.return_1day)}</td><td className={returnTone(item.return_5day)}>{returnLabel(item.return_5day)}</td></tr>)}</tbody></table></div>
+      {!loading && !error && !matches.length && <p className="landing-status">No matching reports. Search a company and fiscal period above to analyse a call.</p>}
+      <footer className="landing-list-footer"><p>Historical returns from the call-day close. These are not live quotes.</p>{history.length < total && <button type="button" onClick={onMore} disabled={loading}>More reports</button>}</footer>
+    </section>
+    <aside className="landing-preview" aria-label="Existing call preview" style={{"--chart-color":(preview?.return_5day || 0) < 0 ? "#ff8798" : "#78e5ad"}}>
+      <div className="landing-section-heading"><h2>Call preview</h2>{featured && <button type="button" className="landing-open" onClick={() => onSelect(featured)}>Open report</button>}</div>
+      {featured ? <><div className="landing-preview-company"><CompanyMark ticker={featured.ticker}/><div><h3>{COMPANIES[featured.ticker] || featured.ticker}</h3><p>{featured.ticker} · Q{featured.quarter} FY{featured.year}</p></div></div><time className="landing-preview-date" dateTime={featured.call_date || undefined}>{callDateLabel(featured.call_date)}</time>{preview ? <MarketPanel result={preview} compact/> : <p className="landing-status" role={previewError ? "alert" : "status"}>{previewError || "Loading the call’s price history…"}</p>}</> : <p className="landing-status">A report and its price history will appear here when the library loads.</p>}
+    </aside>
+  </div>;
+}
+
 export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -209,15 +244,11 @@ export default function App() {
   const [reportView, setReportView] = useState("overview");
   const [source, setSource] = useState(undefined);
   const [playback, setPlayback] = useState(null);
-  const discoverOnce = useRef(!new URLSearchParams(window.location.search).has("report"));
   const reportHeading = useRef(null);
   const requestNumber = useRef(0);
   const displayedReport = useRef(null);
   const callDate = result?.call_date || result?.research?.call_date || result?.daily_prices?.[0]?.date;
-  const featuredReports = useMemo(() => {
-    const checked = history.filter((item) => item.has_research);
-    return checked.length ? checked : history;
-  }, [history]);
+  const isHome = !result && !loading;
 
   useEffect(() => { setReportView("overview"); setSource(undefined); }, [result?.report_id]);
   useEffect(() => { if (reportView !== "overview") setPlayback(null); }, [reportView]);
@@ -242,7 +273,6 @@ export default function App() {
     if (url.toString() !== window.location.href) window.history[push ? "pushState" : "replaceState"]({}, "", url);
   }
   function goHome(push = true) {
-    discoverOnce.current = false;
     requestNumber.current += 1;
     setResult(null); setError(""); setLoading(false); setPlayback(null);
     setReportLocation(null, push);
@@ -257,17 +287,15 @@ export default function App() {
     } catch (err) { if (current === requestNumber.current) setError(err.message); }
     finally { if (current === requestNumber.current) setLoading(false); }
   }
-  function openSaved(item) { discoverOnce.current = false; loadReport(`/reports/${item.report_id}`); }
+  function openSaved(item) { loadReport(`/reports/${item.report_id}`); }
   useEffect(() => {
     function navigate() {
       const id = reportIdFromSearch(window.location.search);
       if (id && id === displayedReport.current) return;
-      if (id) { discoverOnce.current = false; loadReport(`/reports/${id}`, false); }
+      if (id) { loadReport(`/reports/${id}`, false); }
       else {
         const invalid = new URLSearchParams(window.location.search).has("report");
-        const discover = discoverOnce.current;
         goHome(false);
-        discoverOnce.current = discover && !invalid;
         if (invalid) setError("This saved-report link is invalid.");
       }
     }
@@ -284,16 +312,7 @@ export default function App() {
     }).catch(() => { if (!cancelled) { setHistoryError("The call library is unavailable. Try again shortly."); setHistoryLoading(false); } });
     return () => { cancelled = true; };
   }, [sort, limit, refreshKey]);
-  useEffect(() => {
-    if (!discoverOnce.current || historyLoading || !featuredReports.length || result || loading || error) return;
-    discoverOnce.current = false;
-    if (document.querySelector(".search-bar")?.contains(document.activeElement)) return;
-    const preview = featuredReports[Math.floor(Math.random() * featuredReports.length)];
-    loadReport(`/reports/${preview.report_id}`, false);
-  }, [historyLoading, featuredReports, result, loading, error]);
-
   async function handleSubmit({ ticker, year, quarter }) {
-    discoverOnce.current = false;
     const saved = history.find((item) => item.ticker === ticker.toUpperCase() && item.year === year && Number(item.quarter) === quarter);
     if (saved?.has_research) { openSaved(saved); return; }
     const current = ++requestNumber.current;
@@ -312,16 +331,17 @@ export default function App() {
     catch { setShareStatus("manual"); }
   }
 
-  return <div className="app research-desk">
+  return <div className={`app research-desk ${isHome ? "market-home" : ""}`}>
     <a className="skip-link" href="#main">Skip to content</a>
     <header className="app-header"><div className="header-inner"><a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-name"><strong>Earnings</strong> Analyzer</span></a><nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()}>Reports</button><a href="/review.html">How it works</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub ↗</a></nav></div></header>
     <main className="main" id="main">
-      <div className="desk-controls"><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /><p className="period-help">Use the company’s fiscal year, which can differ from the call’s calendar year.</p></section><CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result?.report_id} onMore={() => setLimit((value) => value + 20)} /></div>
+      {isHome && <header className="landing-heading"><div><h1>Earnings calls</h1><p>Search a fiscal period or open a report.</p></div><span>Historical reports</span></header>}
+      <div className="desk-controls"><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /><p className="period-help">Use the company’s fiscal year, which can differ from the call’s calendar year.</p></section>{!isHome && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result?.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className={`desk-grid view-${reportView} ${result ? "report-open" : "no-report"}`}>
         <section className="report-center" aria-label="Earnings call report" aria-busy={Boolean(loading)}>
           {loading && <div className="loading-state" role="status" aria-live="polite"><div className="loading-bar"><div className="loading-fill" /></div><p className="loading-text">{loading === "saved" ? "Opening the saved report…" : "Preparing your source-based report…"}<br/><span>{loading === "saved" ? "No new AI analysis is generated. The free server may need a moment to wake up." : "Reading the transcript, generating findings, and checking source excerpts."}</span></p><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse another call</button></div>}
-          {!result && !loading && <div className="workspace-welcome"><h1>Earnings calls</h1><p>Enter a ticker and fiscal period above, or open an existing report.</p><div className="welcome-samples"><span>Example reports</span>{Object.keys(COMPANIES).filter((ticker) => ticker !== "MSFT").map((ticker) => <button key={ticker} type="button" onClick={() => { discoverOnce.current = false; loadReport(`/examples/${ticker}`); }}><CompanyMark ticker={ticker} />{COMPANIES[ticker]}</button>)}</div></div>}
+          {isHome && <MarketLanding history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} onMore={() => setLimit((value) => value + 20)} />}
           {result && <div className="results">
             <div className="report-heading"><div className="company-heading"><CompanyMark ticker={result.ticker} /><div><div className="company-title-line"><h1 ref={reportHeading} tabIndex={-1}>{COMPANIES[result.ticker] || result.ticker}</h1><span className="report-period">Fiscal Q{result.quarter} · {result.year}</span></div><p className="company-call-date">{result.ticker} · Call held <time dateTime={callDate || undefined}>{callDateLabel(callDate)}</time></p></div></div><button type="button" className="share-report" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy link"}</button></div>
             {callDate && Number(callDate.slice(0, 4)) !== result.year && <p className="fiscal-note">This call took place in {callDate.slice(0, 4)} and reports the company’s <strong>fiscal Q{result.quarter} {result.year}</strong>. Fiscal years do not always match calendar years.</p>}
