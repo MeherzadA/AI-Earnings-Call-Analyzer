@@ -1,6 +1,6 @@
 # Research context
 
-The core business brief is generated from one call transcript, with one Gemini call. Every new analysis also attempts prior-call, filing and dated-coverage research before returning. A context-provider failure preserves the completed analysis, so a retry does not spend another Gemini call. `POST /reports/{id}/context` stores a snapshot inside the existing `research_json` field. Current successful or empty source responses stay cached. Unavailable sources retry once when opening Research, or with **Retry unavailable sources**; failures are not permanently cached as completed research. Opening an older report can use the same loader without regenerating its AI statements. External data availability cannot be guaranteed, and missing evidence is never invented. Original report fields remain intact; no schema migration or paid service is required.
+The core business brief is generated from one call transcript, with one Gemini call. Every new analysis also attempts prior-call and dated-coverage research before returning. A context-provider failure preserves the completed analysis, so a retry does not spend another Gemini call. `POST /reports/{id}/context` stores a snapshot inside the existing `research_json` field. Current successful or empty source responses stay cached. Unavailable sources retry once when opening Research, or with **Retry unavailable sources**; failures are not permanently cached as completed research. Opening an older report can use the same loader without regenerating its AI statements. External data availability cannot be guaranteed, and missing evidence is never invented. Original report fields remain intact; no schema migration or paid service is required.
 
 ## Previous guidance and reported results
 
@@ -14,15 +14,9 @@ For an identified quarterly company-revenue range, explicit dollar ranges and pl
 
 This is a conservative extraction heuristic, not a semantic proof. It can miss valid guidance, misidentify a scope not covered by its rules, and encounter rounded amounts or transcript errors. The original passages remain inspectable. A matched range is not evidence of good management, future returns, or complete coverage. No general extraction-accuracy claim is made.
 
-## SEC filing evidence
+## Filing integration removed
 
-The app uses the SEC issuer map and Company Facts API when reachable. It looks for directly reported quarterly US-GAAP revenue available through the call's calendar date, with matching filing fiscal metadata and a plausible quarter duration. It does not substitute calendar quarters for fiscal quarters, use later filings silently, derive fourth-quarter figures from annual reports, or manufacture a value if no match is found.
-
-The source, period, form, filing date and taxonomy tag accompany any result. Company-filed data is not independent auditing. Intraday filing availability is not verified, and numeric precision may differ from management's rounded remarks. The displayed figure is not a claim that every report statement was checked.
-
-In this development environment, SEC automated endpoints returned HTTP 403. The app therefore shows **Not checked**, the provider failure, and a direct company-filings link. Links alone do not count as completed verification. No proxy or paid fallback was added. Optional `SEC_USER_AGENT` identifies the application to SEC servers; fetching is sequential and results are cached.
-
-References: [SEC API documentation](https://www.sec.gov/search-filings/edgar-application-programming-interfaces), [SEC developer resources](https://www.sec.gov/about/developer-resources).
+The SEC integration was removed because automated requests consistently failed. Research makes no SEC requests and presents no filing-verification panel. Context version 5 drops old cached filing results while retaining successful dated-news snapshots.
 
 ## Dated news
 

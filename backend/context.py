@@ -2,8 +2,6 @@
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from email.utils import parsedate_to_datetime
-from functools import lru_cache
-import os
 import re
 import xml.etree.ElementTree as ET
 
@@ -12,15 +10,15 @@ import requests
 from research import source_hash, source_passages, quantities
 from transcript import fetch_transcript
 
-USER_AGENT = os.getenv("SEC_USER_AGENT", "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)")
+USER_AGENT = "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)"
 NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
-CONTEXT_VERSION = 4
+CONTEXT_VERSION = 5
 
 
 def context_complete(context):
     return context.get("version") == CONTEXT_VERSION and all(
         context.get(section, {}).get("status") in ("available", "empty")
-        for section in ("previous_call", "news", "filings")
+        for section in ("previous_call", "news")
     )
 
 
@@ -198,46 +196,6 @@ def dated_news(ticker, call_date):
             "limitation": "Headline metadata from Google News RSS, not read or verified article content. UTC publication dates only; same-day articles may be after the call. Historical feed coverage is incomplete."}
 
 
-@lru_cache(maxsize=1)
-def sec_tickers():
-    import json
-    try:
-        return {row["ticker"]: int(row["cik_str"]) for row in json.loads(download("https://www.sec.gov/files/company_tickers.json")).values()}, None
-    except (requests.RequestException, RuntimeError, ValueError, KeyError) as error:
-        return {}, str(error) if isinstance(error, RuntimeError) else "SEC data could not be retrieved."
-
-
-def filing_context(ticker, call_date, year, quarter):
-    import json
-    link = f"https://www.sec.gov/edgar/browse/?CIK={ticker}&owner=exclude"
-    tickers, error = sec_tickers()
-    if error:
-        sec_tickers.cache_clear()  # Retry provider failures; retain successful issuer maps.
-    base = {"browse_url": link, "cutoff": call_date, "facts": []}
-    if error or ticker not in tickers:
-        return {**base, "status": "unavailable", "message": error or "No SEC issuer mapping found. No filing figures were checked."}
-    cik = tickers[ticker]
-    data = json.loads(download(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.json"))
-    cutoff = date.fromisoformat(call_date)
-    for tag in ("RevenueFromContractWithCustomerExcludingAssessedTax", "Revenues", "SalesRevenueNet"):
-        values = data.get("facts", {}).get("us-gaap", {}).get(tag, {}).get("units", {}).get("USD", [])
-        eligible = []
-        for item in values:
-            if item.get("form") not in ("10-Q", "10-K") or not item.get("start") or item.get("filed", "9999") > call_date:
-                continue
-            end, start = date.fromisoformat(item["end"]), date.fromisoformat(item["start"])
-            if 60 <= (end - start).days <= 115 and 0 <= (cutoff - end).days <= 100 and item.get("fy") == year and item.get("fp") == f"Q{quarter}":
-                eligible.append(item)
-        if eligible:
-            item = max(eligible, key=lambda row: (row["end"], row["filed"]))
-            accession = item["accn"]
-            return {**base, "status": "available", "facts": [{"label": "Quarterly revenue", "value": money(Decimal(item["val"])),
-                "period_start": item["start"], "period_end": item["end"], "filed": item["filed"], "form": item["form"], "tag": tag,
-                "url": f"https://www.sec.gov/Archives/edgar/data/{cik}/{accession.replace('-', '')}/{accession}-index.html"}],
-                "message": "Company-filed figures available through the call's UTC calendar date. Intraday availability is not verified. This is not an audit or a claim that all report statements agree."}
-    return {**base, "status": "empty", "message": "No directly comparable quarterly revenue fact was found in filings available by this date. Annual/Q4 derivations are not guessed."}
-
-
 def build_context(ticker, year, quarter, research, call_date, previous=None):
     if not call_date:
         current = fetch_transcript(ticker, year, quarter)
@@ -262,17 +220,14 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
     comparison = compare_outlook(prior["outlooks"], actual)
     if actual:
         comparison["reported"] = {key: value for key, value in actual.items() if key not in ("amount", "period_terms")}
-    sections = {}
     cached = research.get("context", {})
-    for name, provider in (("news", lambda: dated_news(ticker, call_date)), ("filings", lambda: filing_context(ticker, call_date, year, quarter))):
-        if cached.get("call_date") == call_date and cached.get(name, {}).get("status") in ("available", "empty"):
-            sections[name] = cached[name]
-            continue
+    news = cached.get("news", {})
+    if cached.get("call_date") != call_date or news.get("status") not in ("available", "empty"):
         try:
-            sections[name] = provider()
+            news = dated_news(ticker, call_date)
         except (requests.RequestException, RuntimeError, ValueError, KeyError, ET.ParseError) as error:
-            sections[name] = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "This source could not be loaded.", "items": [], "facts": []}
+            news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": []}
     return {"version": CONTEXT_VERSION, "call_date": call_date, "loaded_at": datetime.now(timezone.utc).isoformat(),
             "external_sources_loaded_at": cached.get("external_sources_loaded_at", cached.get("loaded_at")) if cached.get("call_date") == call_date else datetime.now(timezone.utc).isoformat(), "previous_call": prior,
-            "comparison": comparison, **sections,
-            "scope": "No extra AI generation. Prior-call extraction, stated-value arithmetic, SEC data when reachable, and dated headline links. These sources do not establish impartiality or report accuracy."}
+            "comparison": comparison, "news": news,
+            "scope": "No extra AI generation. Prior-call extraction, stated-value arithmetic, and dated headline links. These sources do not establish impartiality or report accuracy."}

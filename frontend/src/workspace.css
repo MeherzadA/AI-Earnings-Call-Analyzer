@@ -203,10 +203,6 @@
 .unpaired-actual { margin-top:20px; padding:20px; border:1px solid #dbe3ef; border-radius:6px; }
 .unpaired-actual > span { display:block; font-size:13px; color:#6a7890; }
 .unpaired-actual > strong { display:block; font:700 25px var(--display); margin:10px 0 18px; }
-.filing-status-note { border-left:3px solid #d4ab4e; padding:15px 19px; background:#faf7ef; color:#775c2f; }
-.filing-status-note > strong { font-size:14px; }
-.filing-status-note p { font-size:13px; line-height:1.8; margin:7px 0; }
-.filing-status-note a { font-size:13px; }
 .source-retry { align-self:start; }
 .market-status,.market-explanation,.price-provider { color:#62728b; font-size:13px; line-height:1.85; }
 .market-explanation { padding:17px 20px; border-left:3px solid #b9cce7; background:#f6f8fc; }
@@ -225,7 +221,7 @@
 .research-loading p { font-size:14px; color:#687990; margin-top:8px; }
 .source-availability { display:flex; flex-wrap:wrap; gap:10px 20px; font-size:12px; line-height:1.8; color:#748196; }
 .source-availability strong { color:#405772; font-weight:500; }
-.expectation-card,.filing-digest,.coverage-digest { min-width:0; padding:24px; border:1px solid #dce3ed; border-radius:9px; background:white; }
+.expectation-card,.coverage-digest { min-width:0; padding:24px; border:1px solid #dce3ed; border-radius:9px; background:white; }
 .expectation-card { border-top:4px solid #2c60b6; }
 .digest-section-heading { display:flex; justify-content:space-between; align-items:start; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
 .digest-section-heading h3 { font:750 23px/1.4 var(--display); letter-spacing:-.5px; margin-top:6px; }
@@ -259,10 +255,6 @@
 .outside-research-grid { display:grid; grid-template-columns:minmax(240px,.8fr) minmax(0,1.2fr); gap:20px; align-items:start; }
 .provider-note { font-size:15px; color:#6b7b91; line-height:1.85; }
 .filing-link { display:inline-block; margin-top:18px; color:#2455b8; font-size:14px; line-height:1.8; }
-.filed-figure > span { color:#65778f; font-size:14px; }
-.filed-figure > strong { display:block; font:700 27px var(--display); margin:12px 0; }
-.filed-figure p { color:#718198; font-size:13px; line-height:1.8; }
-.filed-figure a { display:inline-block; margin-top:12px; font-size:14px; color:#2455b8; }
 .coverage-dates,.coverage-disclosure { color:#78869a; font-size:12px; line-height:1.85; }
 .coverage-list { list-style:none; padding:0; margin:5px 0 0; }
 .coverage-list li { padding:17px 0; border-bottom:1px solid #e0e7f1; }
@@ -330,7 +322,7 @@
  .market-v2 h2 { font-size:24px; }
  .expectation-pair { grid-template-columns:1fr; }
  .expectation-pair > article + article { border-left:0; border-top:1px solid #d8e1ef; }
- .expectation-card,.filing-digest,.coverage-digest { padding:18px; }
+ .expectation-card,.coverage-digest { padding:18px; }
  .digest-heading h2 { font-size:25px; }
  .digest-section-heading h3 { font-size:21px; }
  .workspace-welcome { padding:25px; }
