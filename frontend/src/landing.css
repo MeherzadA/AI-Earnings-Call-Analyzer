@@ -48,7 +48,8 @@
 .landing-table thead th:last-child,.landing-table td:last-child { padding-right:20px; }
 .landing-table tbody th,.landing-table td { padding:15px 12px; border-bottom:1px solid #e1e7ee; }
 .landing-table tbody th { padding-left:20px; font-weight:400; }
-.landing-table tr:has(button:hover),.landing-table tr:has(button:focus-visible) { background:#edf3fc; }
+.landing-table tbody tr { cursor:pointer; }
+.landing-table tbody tr:hover,.landing-table tbody tr:focus-within { background:#edf3fc; }
 .landing-company { display:flex; align-items:center; gap:11px; background:none; border:0; padding:0; color:#243d5a; text-align:left; min-height:40px; }
 .market-home .landing-company .company-mark,.market-home .landing-preview-company .company-mark { width:31px; height:33px; padding:4px; border-radius:3px; background:#f8fbfd; flex:none; }
 .market-home .landing-company .company-mark img,.market-home .landing-preview-company .company-mark img { width:100%; height:100%; object-fit:contain; }
