@@ -183,7 +183,7 @@ function CallLibrary({ history, total, sort, onSort, loading, error, onRetry, on
   }, [expanded]);
   const matches = history.filter((item) => `${item.ticker} ${item.year} Q${item.quarter} ${callDateLabel(item.call_date)}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="call-library" ref={wrap}>
-    <button type="button" className="library-trigger" aria-expanded={expanded} aria-controls="call-library-panel" onClick={() => setExpanded(!expanded)}>Call library <b>{total}</b><span aria-hidden="true">⌄</span></button>
+    <button type="button" className="library-trigger" aria-expanded={expanded} aria-controls="call-library-panel" onClick={() => setExpanded(!expanded)}>Call library {!loading && !error && <b>{total}</b>}<span aria-hidden="true">⌄</span></button>
     {expanded && <section id="call-library-panel" className="library-panel" aria-label="Call library"><div className="library-heading"><div><h2>Call library</h2><p>Previously analysed calls.</p></div><button type="button" aria-label="Close call library" onClick={() => setExpanded(false)}>×</button></div><label className="sr-only" htmlFor="library-query">Filter calls by ticker, date or period</label><input id="library-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by ticker, date or year" />
       <label className="sr-only" htmlFor="saved-sort">Sort reports</label><select id="saved-sort" className="rail-sort" value={sort} onChange={(event) => onSort(event.target.value)}><option value="recent">Recently added</option><option value="movers">Largest 1-day move</option><option value="gains">Biggest gain</option><option value="drops">Biggest drop</option></select>
       {loading && <p className="rail-status" role="status">Loading calls…</p>}{error && <p className="rail-status">{error} <button type="button" onClick={onRetry}>Try again</button></p>}
@@ -213,7 +213,7 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const matches = history.filter((item) => `${item.ticker} ${COMPANIES[item.ticker] || ""} ${item.year} Q${item.quarter} ${callDateLabel(item.call_date)}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="landing-board">
     <section className="landing-reports" aria-labelledby="landing-reports-title">
-      <div className="landing-section-heading"><h2 id="landing-reports-title">Reports <span>{total}</span></h2><div className="landing-sort" role="group" aria-label="Sort reports"><button type="button" aria-pressed={sort === "recent"} onClick={() => onSort("recent")}>Recently added</button><button type="button" aria-pressed={sort === "movers"} onClick={() => onSort("movers")}>Largest 1-day move</button></div></div>
+      <div className="landing-section-heading"><h2 id="landing-reports-title">Reports {!loading && !error && <span>{total}</span>}</h2><div className="landing-sort" role="group" aria-label="Sort reports"><button type="button" aria-pressed={sort === "recent"} onClick={() => onSort("recent")}>Recently added</button><button type="button" aria-pressed={sort === "movers"} onClick={() => onSort("movers")}>Largest 1-day move</button></div></div>
       <label className="sr-only" htmlFor="landing-filter">Filter reports by company, date or fiscal period</label><input id="landing-filter" className="landing-filter" placeholder="Filter by company, date or fiscal year" value={query} onChange={(event) => setQuery(event.target.value)} />
       {loading && <p className="landing-status" role="status">Loading reports…</p>}
       {error && <p className="landing-status" role="alert">{error} <button type="button" onClick={onRetry}>Retry</button></p>}
@@ -230,6 +230,7 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
 
 export default function App() {
   const [loading, setLoading] = useState(false);
+  const [requestedPeriod, setRequestedPeriod] = useState(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [history, setHistory] = useState([]);
@@ -277,8 +278,9 @@ export default function App() {
     setResult(null); setError(""); setLoading(false); setPlayback(null);
     setReportLocation(null, push);
   }
-  async function loadReport(path, push = true) {
+  async function loadReport(path, push = true, period = null) {
     const current = ++requestNumber.current;
+    setRequestedPeriod(period);
     setError(""); setResult(null); setPlayback(null); setLoading("saved");
     try {
       const data = await apiRequest(path, { timeoutMs: 90000 });
@@ -287,7 +289,7 @@ export default function App() {
     } catch (err) { if (current === requestNumber.current) setError(err.message); }
     finally { if (current === requestNumber.current) setLoading(false); }
   }
-  function openSaved(item) { loadReport(`/reports/${item.report_id}`); }
+  function openSaved(item) { loadReport(`/reports/${item.report_id}`, true, item); }
   useEffect(() => {
     function navigate() {
       const id = reportIdFromSearch(window.location.search);
@@ -317,6 +319,7 @@ export default function App() {
     if (saved?.has_research) { openSaved(saved); return; }
     const current = ++requestNumber.current;
     const previous = result?.ticker === ticker && result.year === year && result.quarter === quarter ? result : null;
+    setRequestedPeriod({ ticker, year, quarter });
     setError(""); setResult(null); setPlayback(null); setLoading("analysis");
     try {
       const data = await apiRequest("/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, year, quarter, with_research: true }) });
@@ -336,11 +339,16 @@ export default function App() {
     <header className="app-header"><div className="header-inner"><a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-name"><strong>Earnings</strong> Analyzer</span></a><nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()}>Reports</button><a href="/review.html">How it works</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub ↗</a></nav></div></header>
     <main className="main" id="main">
       {isHome && <header className="landing-heading"><div><h1>Earnings calls</h1><p>Search a fiscal period or open a report.</p></div><span>Historical reports</span></header>}
-      <div className="desk-controls"><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result} /><p className="period-help">Use the company’s fiscal year, which can differ from the call’s calendar year.</p></section>{!isHome && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result?.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
+      <div className="desk-controls" hidden={Boolean(loading)}><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result || requestedPeriod} /><p className="period-help">Use the company’s fiscal year, which can differ from the call’s calendar year.</p></section>{result && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className={`desk-grid view-${reportView} ${result ? "report-open" : "no-report"}`}>
         <section className="report-center" aria-label="Earnings call report" aria-busy={Boolean(loading)}>
-          {loading && <div className="loading-state" role="status" aria-live="polite"><div className="loading-bar"><div className="loading-fill" /></div><p className="loading-text">{loading === "saved" ? "Opening the saved report…" : "Preparing your source-based report…"}<br/><span>{loading === "saved" ? "No new AI analysis is generated. The free server may need a moment to wake up." : "Reading the transcript, generating findings, and checking source excerpts."}</span></p><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse another call</button></div>}
+          {loading && <div className="loading-state report-loading" role="status" aria-live="polite">
+            {requestedPeriod && <div className="loading-call"><CompanyMark ticker={requestedPeriod.ticker} /><div><h1>{COMPANIES[requestedPeriod.ticker] || requestedPeriod.ticker}</h1><p>{requestedPeriod.ticker} · Q{requestedPeriod.quarter} FY{requestedPeriod.year}</p></div></div>}
+            <div className="loading-bar"><div className="loading-fill" /></div>
+            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Loading report…"}<span>{loading === "saved" ? "Opening an existing report. No new analysis is needed." : "An existing report opens directly. A new call takes longer to analyse."}</span></p>
+            <div className="loading-actions"><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse reports</button></div>
+          </div>}
           {isHome && <MarketLanding history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} onMore={() => setLimit((value) => value + 20)} />}
           {result && <div className="results">
             <div className="report-heading"><div className="company-heading"><CompanyMark ticker={result.ticker} /><div><div className="company-title-line"><h1 ref={reportHeading} tabIndex={-1}>{COMPANIES[result.ticker] || result.ticker}</h1><span className="report-period">Fiscal Q{result.quarter} · {result.year}</span></div><p className="company-call-date">{result.ticker} · Call held <time dateTime={callDate || undefined}>{callDateLabel(callDate)}</time></p></div></div><button type="button" className="share-report" onClick={shareReport}>{shareStatus && shareStatus !== "manual" ? shareStatus : "Copy link"}</button></div>
