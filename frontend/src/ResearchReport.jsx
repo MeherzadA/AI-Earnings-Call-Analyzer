@@ -20,12 +20,11 @@ function Evidence({ citations, onSource }) {
 
 function FindingCard({ finding, index, onSource }) {
   return <article className={`finding-card category-${finding.category}`}>
-    <div className="finding-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</div>
+    <div className="finding-card-header"><p className="finding-subject">{SUBJECTS[finding.category]}</p><span className="finding-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span></div>
     <div className="finding-body">
-      <p className="finding-subject">{SUBJECTS[finding.category]}</p>
       <h3>{finding.headline}</h3>
       <div className="finding-columns">
-        {finding.observation && <div><h4>AI observation</h4><p>{finding.observation}</p></div>}
+        {finding.observation && finding.observation !== finding.headline && <div><h4>AI observation</h4><p>{finding.observation}</p></div>}
         {finding.interpretation && <div className="finding-interpretation"><h4>AI interpretation</h4><p>{finding.interpretation}</p></div>}
       </div>
       <Evidence citations={finding.citations} onSource={onSource} />
@@ -88,32 +87,34 @@ export default function ResearchReport({ result, view = "overview", onSource, on
   useEffect(() => setVisibleCount(6), [view]);
   const concerns = research?.findings.filter((finding) => finding.category === "risks") || [];
   const developments = research?.findings.filter((finding) => finding.category !== "risks") || [];
+  const activeFindings = view === "concerns" ? concerns : developments;
+  const findingLabel = view === "concerns" ? "concern" : "development";
   const sourceQuote = (developments[0] || concerns[0])?.citations[0];
   const openSource = (citation = null) => onSource(citation);
   const emptyConcern = "No dedicated concern was retained. This does not establish that the company has no risks or that this is a complete risk assessment.";
   return <>
-      {(view === "findings" || view === "concerns") && <div className="report-intro"><span className="tone-tag">{checked ? "Source excerpts available" : "AI statements · Excerpts not recorded"}</span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>}
       {view === "overview" && <>
         <div className="workspace-overview">
-          <div className={`call-source-row ${sourceQuote ? "" : "audio-only"}`}>
-          <section className="call-panel" aria-labelledby="call-panel-title"><div className="panel-heading"><h2 id="call-panel-title">Call audio</h2><button type="button" className="player-transcript" onClick={() => openSource()}>▤ Full transcript →</button></div><CallReplay key={result.report_id} result={result} onPlayback={onPlayback} /></section>
-          {sourceQuote && <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>In management’s words</h2><span>Matched excerpt</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section>}
-          </div>
           <section className="quarter-brief" aria-label="Key finding and concern">
+            <header className="briefing-heading"><div><p className="eyebrow">THE CALL BRIEF</p><h2>The quarter, distilled.</h2></div><span>Start here. Follow the evidence.</span></header>
             <div className="brief-takeaways">
-            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "!" : "↗"}</span>{finding.category === "risks" ? "CONCERN / RISK" : "KEY DEVELOPMENT"}</p><h3>{finding.headline}</h3>{finding.observation && <p>{finding.observation}</p>}<button type="button" onClick={() => openSource(finding.citations[0] || null)}>{checked ? "Inspect evidence →" : "Read transcript →"}</button></article>)}
+            {[developments[0], concerns[0]].filter(Boolean).map((finding) => <article key={finding.id} className={`brief-takeaway ${finding.category === "risks" ? "brief-concern" : "brief-development"}`}><p className="takeaway-label"><span aria-hidden="true">{finding.category === "risks" ? "!" : "↗"}</span>{finding.category === "risks" ? "CONCERN TO EXAMINE" : "LEADING DEVELOPMENT"}</p><h3>{finding.headline}</h3><button type="button" onClick={() => openSource(finding.citations[0] || null)}>{checked ? "Inspect evidence →" : "Read transcript →"}</button></article>)}
             {!concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
             </div>
           </section>
+          <div className={`call-source-row ${sourceQuote ? "" : "audio-only"}`}>
+          <section className="call-panel" aria-labelledby="call-panel-title"><div className="panel-heading"><h2 id="call-panel-title">Call audio</h2><button type="button" className="player-transcript" onClick={() => openSource()}>▤ Full transcript →</button></div><CallReplay key={result.report_id} result={result} onPlayback={onPlayback} /></section>
+          {sourceQuote && <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>In management’s words</h2><span>FROM THE TRANSCRIPT</span></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context →</button></section>}
+          </div>
         </div>
         <p className="source-scope">The brief uses management’s transcript. Management tone: {research.management_tone} (AI assessment). {concerns.length ? "" : emptyConcern}</p>
       </>}
-      {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
-        <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
-        <p className="section-description">{checked ? "AI-written observations and interpretations with matched source excerpts." : "Previously saved AI statements, presented as individual cards. Source checks were not recorded."} Guidance describes management’s expectations.</p>
+      {(view === "findings" || view === "concerns") && <section className={`research-findings ${view === "concerns" ? "risk-desk" : "development-desk"}`} aria-labelledby="findings-title">
+        <header className="section-dossier"><div className="dossier-symbol" aria-hidden="true">{view === "concerns" ? "!" : "↗"}</div><div><p className="eyebrow">{view === "concerns" ? "THE RISK DESK" : "THE RESULTS DESK"}</p><h2 id="findings-title">{view === "concerns" ? "What needs a closer look." : "What moved the business."}</h2><p>{view === "concerns" ? "Pressures, setbacks and uncertainties mentioned in the call. Each concern opens back to its source." : "Results, management’s outlook and opportunities — separated by topic, backed by the call."}</p></div><div className="dossier-actions"><span className="dossier-count"><b>{activeFindings.length}</b>{findingLabel}{activeFindings.length === 1 ? "" : "s"}</span><button type="button" onClick={() => openSource()}>Full transcript ↗</button></div></header>
+        <p className="section-description">{checked ? "AI-written observations and interpretations · Matched transcript excerpts" : "Previously saved AI statements · Source checks not recorded"}{view === "concerns" ? " · Not a complete risk assessment." : " · Guidance is management’s expectation."}</p>
         {view === "findings" && research.financial_highlights.length > 0 && <details className="all-financials"><summary>Financial highlights from the call</summary><div className="all-financials-grid">{research.financial_highlights.map((metric) => <article key={metric.id}><p>{metric.label}</p><strong>{metric.value}</strong><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></details>}
-        <div className="findings-grid">{(view === "concerns" ? concerns : developments).slice(0, visibleCount).map((finding, index) => <FindingCard key={finding.id} finding={finding} index={index} onSource={openSource} />)}</div>
-        {(view === "concerns" ? concerns : developments).length > visibleCount && <button type="button" className="outline-btn" onClick={() => setVisibleCount((count) => count + 6)}>Show more findings</button>}
+        <div className="findings-grid">{activeFindings.slice(0, visibleCount).map((finding, index) => <FindingCard key={finding.id} finding={finding} index={index} onSource={openSource} />)}</div>
+        {activeFindings.length > visibleCount && <button type="button" className="outline-btn" onClick={() => setVisibleCount((count) => count + 6)}>Show more findings</button>}
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
