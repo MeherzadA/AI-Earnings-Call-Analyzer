@@ -40,7 +40,7 @@ from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
-from context import build_context, CONTEXT_VERSION, transcript_revenue
+from context import build_context, CONTEXT_VERSION, context_complete, transcript_revenue
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -155,7 +155,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
     transcript, analysis = report_by_id(db, report_id)
     report_response(transcript, analysis)  # Validate stored source and actual call date.
     document = json.loads(analysis.research_json) if analysis.research_json else {}
-    if document.get("source_hash") == source_hash(transcript.raw_text) and document.get("context", {}).get("version") == CONTEXT_VERSION:
+    if document.get("source_hash") == source_hash(transcript.raw_text) and context_complete(document.get("context", {})):
         return {"context": document["context"], "cached": True}
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
@@ -164,7 +164,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
         research = json.loads(analysis.research_json) if analysis.research_json else {}
         if research.get("source_hash") not in (None, source_hash(transcript.raw_text)):
             research = {}
-        if research.get("context", {}).get("version") == CONTEXT_VERSION:
+        if context_complete(research.get("context", {})):
             return {"context": research["context"], "cached": True}
         previous_year, previous_quarter = (transcript.year, int(transcript.quarter) - 1) if int(transcript.quarter) > 1 else (transcript.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
@@ -187,6 +187,15 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
         return {"context": context, "cached": False}
     finally:
         generation_lock.release()
+
+
+def report_with_context(transcript, analysis, db, cached=True):
+    try:
+        load_context(analysis.id, db)
+    except HTTPException as error:
+        # Keep the completed AI analysis; Research can retry without spending another model call.
+        logging.warning("Research context incomplete for report %s (%s)", analysis.id, error.status_code)
+    return report_response(transcript, analysis, cached=cached)
 
 
 @app.get("/examples")
@@ -224,7 +233,7 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     if existing and stored_research(existing[1]):
         stored = stored_research(existing[1])
         if stored["source_hash"] == source_hash(existing[0].raw_text) or not request.with_research:
-            return report_response(*existing)
+            return report_with_context(*existing, db)
     if existing and not request.with_research:
         return report_response(*existing)
     # A single generation at a time protects the shared free-tier quota and instance memory.
@@ -269,9 +278,9 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
             )
             db.add(db_analysis)
         db.commit()
-        return report_response(db_transcript, db_analysis, cached=False)
     finally:
         generation_lock.release()
+    return report_with_context(db_transcript, db_analysis, db, cached=False)
 
 
 @app.get("/history")

@@ -20,13 +20,14 @@ export default function ResearchContext({ result, onSource, active }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const attempted = useRef(false);
+  const retrySources = context && ["previous_call", "news", "filings"].some((section) => context[section]?.status === "unavailable");
   async function load() {
     setLoading(true); setError("");
     try { const data = await apiRequest(`/reports/${result.report_id}/context`, { method:"POST" }); setContext(data.context); }
     catch (failure) { setError(failure.message); }
     finally { setLoading(false); }
   }
-  useEffect(() => { if (active && !context && !attempted.current) { attempted.current = true; load(); } }, [active, context]);
+  useEffect(() => { if (active && (!context || retrySources) && !attempted.current) { attempted.current = true; load(); } }, [active, context, retrySources]);
   const comparison = context?.comparison;
   const paired = comparison?.outlook;
   const otherOutlooks = context?.previous_call.outlooks.filter((item) => item.quote !== paired?.quote) || [];
@@ -38,7 +39,7 @@ export default function ResearchContext({ result, onSource, active }) {
     {!context && !error && <div className="research-loading" role="status"><span className="spinner"/><div><h3>Connecting the sources…</h3><p>Retrieving the earlier call, filing data, and dated coverage.</p></div></div>}
     {error && <div className="error-banner" role="alert"><p>{error}</p><button type="button" className="outline-btn" disabled={loading} onClick={load}>Try research again</button></div>}
     {context && <>
-      <div className="source-availability"><span>Call · <strong>{callDateLabel(context.call_date)}</strong></span><span>Earlier call · <strong>{context.previous_call.status === "available" ? "Available" : "Unavailable"}</strong></span><span>Filings · <strong>{context.filings.status === "available" ? "Available" : "Unavailable"}</strong></span><span>Coverage · <strong>{headlines.length} links</strong></span></div>
+      <div className="source-availability"><span>Call · <strong>{callDateLabel(context.call_date)}</strong></span><span>Earlier call · <strong>{context.previous_call.status === "available" ? "Available" : "Unavailable"}</strong></span><span>Filings · <strong>{context.filings.status === "available" ? "Available" : "Unavailable"}</strong></span><span>Coverage · <strong>{headlines.length} links</strong></span>{retrySources && <button type="button" className="text-btn" disabled={loading} onClick={load}>{loading ? "Retrying sources…" : "Retry unavailable sources"}</button>}</div>
       <section className={`expectation-card verdict-${comparison.position || comparison.status}`}>
         <div className="digest-section-heading"><div><p className="section-kicker">01 / EXPECTATION & OUTCOME</p><h3>Did {target} deliver?</h3></div>{paired && <span className="verdict-chip">{comparison.status === "directional" ? "Directional comparison" : comparison.position === "above" ? "Above outlook" : comparison.position === "below" ? "Below outlook" : "Within outlook"}</span>}</div>
         {paired ? <>
