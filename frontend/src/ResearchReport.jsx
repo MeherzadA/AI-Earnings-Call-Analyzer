@@ -93,7 +93,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
       {(view === "findings" || view === "concerns") && <section className="research-findings" aria-labelledby="findings-title">
         <div className="section-heading"><div><p className="eyebrow">{view === "concerns" ? "THE OTHER SIDE OF THE QUARTER" : "THE QUARTER, IN FOCUS"}</p><h2 id="findings-title">{view === "concerns" ? "Concerns & risks" : "Key developments"}</h2></div><span>{(view === "concerns" ? concerns : developments).length} findings</span></div>
         <p className="section-description">AI-written observations and interpretations, with their source evidence. Guidance describes management’s expectations.</p>
-        <div className="findings-grid">{(view === "concerns" ? concerns : developments).map((finding) => <FindingCard key={finding.id} finding={finding} index={research.findings.indexOf(finding)} onSource={openSource} />)}</div>
+        <div className="findings-grid">{(view === "concerns" ? concerns : developments).map((finding, index) => <FindingCard key={finding.id} finding={finding} index={index} onSource={openSource} />)}</div>
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
