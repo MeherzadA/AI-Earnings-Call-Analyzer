@@ -9,7 +9,7 @@ function QuoteContext({ outlook }) {
 }
 
 export default function ResearchContext({ result, onSource, active }) {
-  const [context, setContext] = useState(result.research?.context?.version === 2 ? result.research.context : null);
+  const [context, setContext] = useState(result.research?.context?.version === 3 ? result.research.context : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const attempted = useRef(false);
@@ -26,21 +26,27 @@ export default function ResearchContext({ result, onSource, active }) {
     attempted.current = true;
     load();
   }, [active, context]);
+  const comparison = context?.comparison;
+  const otherOutlooks = context?.previous_call.outlooks.filter((outlook) => outlook.quote !== comparison?.outlook?.quote) || [];
   return <section className="research-context" aria-labelledby="context-title">
-    <div className="section-heading"><div><p className="eyebrow">REVENUE OUTLOOK VS. RESULTS</p><h2 id="context-title">What was projected—and what happened?</h2></div></div>
-    <p className="section-description">Compare management’s forecast from the preceding call with revenue reported in this call. Different metrics or fiscal periods cannot fairly be compared.</p>
+    <div className="section-heading"><div><p className="eyebrow">EXPECTATION → OUTCOME</p><h2 id="context-title">Did revenue deliver on management’s outlook?</h2></div></div>
+    <p className="section-description">The previous call looked ahead to this quarter. Here we connect that revenue expectation with what the company now reports, so you can assess how the outcome lined up.</p>
     {!context && !error && <div className="context-load card" role="status"><h3>Loading the earlier outlook…</h3><p>This loads automatically when you open this view and is then saved. No additional Gemini call.</p></div>}
     {error && <div className="error-banner" role="alert"><p>{error}</p><button type="button" className="text-btn" disabled={loading} onClick={load}>Retry loading context</button></div>}
     {context && <>
       <p className="context-stamp">Call date: {context.call_date} · Saved {new Date(context.loaded_at).toLocaleDateString()} · No additional AI generation</p>
       <section className="context-card card" aria-labelledby="outlook-title">
-        <div className="context-card-heading"><h3 id="outlook-title">{context.comparison.status === "compared" ? `Revenue came in ${context.comparison.position} the earlier range` : "A fair numerical comparison isn’t available"}</h3></div>
-        <p>{context.comparison.message}</p>
-        <div className="comparison-values"><div className="previous-value"><span>1 · EARLIER OUTLOOK</span><h4>From the Q{context.previous_call.quarter} FY{context.previous_call.year} call</h4><strong>{context.comparison.range || "No comparable range identified"}</strong><p>What management projected for the coming quarter.</p></div><div className="current-value"><span>2 · CURRENT RESULT</span><h4>Reported for Q{result.quarter} FY{result.year}</h4><strong>{context.comparison.reported?.value || "No comparable revenue value saved"}</strong><p>Call dated {context.call_date}.</p>{context.comparison.reported?.citations.map((citation, i) => <button key={i} type="button" className="text-btn" onClick={() => onSource(citation)}>Inspect this reported value ↗</button>)}</div></div>
-        {context.previous_call.outlooks.length > 0 && <h4>Forecast statements found in the preceding call</h4>}
-        {context.previous_call.outlooks.map((outlook, index) => <article className="outlook-quote" key={index}><p className="context-source-label">Q{context.previous_call.quarter} FY{context.previous_call.year} · {outlook.passage_id}{outlook.metric_scope === "segment_or_unclear" ? " · Segment scope; not compared with company-wide revenue" : ""}</p><blockquote>{outlook.quote}</blockquote><details className="prior-outlook"><summary>See surrounding context</summary><p>The exact quoted sentence is highlighted.</p><QuoteContext outlook={outlook} /></details></article>)}
-        {!context.previous_call.outlooks.length && <p className="context-notice">{context.previous_call.message || "No explicit revenue forecast was identified. Disclaimers and past results are not substituted for guidance."}</p>}
-        <p className="context-limit">{context.comparison.limitation || "Qualitative guidance, ambiguous periods and missing comparable metrics are left unscored."}</p>
+        <p className="guidance-connection">Q{context.previous_call.quarter} FY{context.previous_call.year} forecast <span aria-hidden="true">→</span> Q{result.quarter} FY{result.year} result <span>Same quarter being assessed: Q{result.quarter} FY{result.year}</span></p>
+        <div className="context-card-heading"><h3 id="outlook-title">{comparison.headline}</h3><span className="context-status">{comparison.status === "directional" ? "Direction only · no exact target" : comparison.status === "compared" ? "Compared with management’s target" : "Not enough matching evidence"}</span></div>
+        {comparison.outlook ? <>
+          <div className="comparison-values">
+            <div className="previous-value"><span>WHAT MANAGEMENT EXPECTED FOR Q{result.quarter}</span><strong>{comparison.expected}</strong><p>Stated in the Q{context.previous_call.quarter} FY{context.previous_call.year} call.</p><details className="prior-outlook"><summary>Read the earlier forecast</summary><QuoteContext outlook={comparison.outlook} /></details></div>
+            <div className="current-value"><span>WHAT IT REPORTED FOR Q{result.quarter}</span><strong>{comparison.reported?.value}</strong>{comparison.actual_change && <p className="actual-change">{comparison.actual_change}</p>}<p>Reported in this call, dated {context.call_date}.</p>{comparison.reported?.citations.map((citation, i) => <details className="prior-outlook" key={i}><summary>Read the reported result</summary><blockquote><mark>{citation.quote}</mark></blockquote><button type="button" className="text-btn" onClick={() => onSource(citation)}>Open in this call’s transcript ↗</button></details>)}</div>
+          </div>
+          <div className="guidance-takeaway"><h4>WHAT THIS TELLS YOU</h4><p>{comparison.message}</p><p>{comparison.takeaway}</p></div>
+        </> : <><p>{context.previous_call.status === "unavailable" ? context.previous_call.message : comparison.message}</p>{comparison.reported && <p className="context-notice">This quarter’s reported total revenue is {comparison.reported.value}. That amount alone does not show whether an earlier growth forecast was met.</p>}</>}
+        {otherOutlooks.length > 0 && <details className="unpaired-outlooks"><summary>{otherOutlooks.length} other earlier {otherOutlooks.length === 1 ? "projection" : "projections"} — not compared</summary><p>These are kept separate because this check cannot connect them to a matching reported result. They are not evidence that management met or missed its outlook.</p>{otherOutlooks.map((outlook, index) => <article className="outlook-quote" key={index}><p className="context-source-label">{outlook.metric_scope === "currency_impact" ? "Currency effect — needs the reported currency impact" : outlook.metric_scope === "segment_or_unclear" ? "Segment revenue — needs a matching segment result" : !outlook.period_explicit ? "The target quarter is unclear" : "Needs a matching growth result or a stated numerical target"}</p><blockquote>{outlook.quote}</blockquote><details className="prior-outlook"><summary>See source context</summary><QuoteContext outlook={outlook} /></details></article>)}</details>}
+        <p className="context-limit">{comparison.limitation || "This check covers total-company revenue only. It does not assess every forecast, explain what caused the outcome, or independently verify management’s figures."}</p>
       </section>
       {context.filings.status !== "available" && <details className="filing-unavailable"><summary>SEC filing check unavailable — no filing figures verified</summary><p>{context.filings.message}</p><a href={context.filings.browse_url || `https://www.sec.gov/edgar/browse/?CIK=${result.ticker}&owner=exclude`} target="_blank" rel="noreferrer">Browse company filings manually ↗</a></details>}
       <div className="external-context-grid">
