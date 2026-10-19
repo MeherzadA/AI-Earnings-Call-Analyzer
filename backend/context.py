@@ -14,7 +14,7 @@ from transcript import fetch_transcript
 
 USER_AGENT = os.getenv("SEC_USER_AGENT", "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)")
 NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
-CONTEXT_VERSION = 3
+CONTEXT_VERSION = 4
 
 
 def download(url, *, params=None, limit=8_000_000):
@@ -54,13 +54,14 @@ def revenue_highlight(research):
     return None
 
 
-def transcript_revenue(text):
+def transcript_revenue(text, quarter=None):
     """Literal fallback for older reports: require explicit company/quarter scope, never infer a value."""
+    quarter_scope = rf"Q{quarter} revenue|{('first', 'second', 'third', 'fourth')[quarter - 1]}[ -]quarter revenue|" if quarter else ""
     for passage in source_passages(text):
         for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z])", passage["text"]):
             if re.search(r"\b(?:expect|forecast|guidance|annual|full year|segment|services|gaming|data center|cloud)\b", sentence, re.I):
                 continue
-            match = re.search(r"\b(?:total (?:company )?revenue(?: for (?:the|this|our) quarter)?|quarterly revenue|revenue for (?:the|this|our|the fourth|the third|the second|the first) quarter)\s+(?:was|were|of|reached|totaled|came in at)\s+(?:a record |record )?\$(\d[\d,.]*)\s*(billion|million)\b", sentence, re.I)
+            match = re.search(rf"\b(?:{quarter_scope}total (?:company )?revenue(?: for (?:the|this|our) quarter)?|quarterly revenue|revenue for (?:the|this|our|the fourth|the third|the second|the first) quarter)\s+(?:was|were|of|reached|totaled|came in at)\s+(?:a record |record )?\$(\d[\d,.]*)\s*(billion|million)\b", sentence, re.I)
             if not match:
                 continue
             value = re.search(r"\$\d[\d,.]*\s*(?:billion|million)", match[0], re.I)[0]
@@ -69,7 +70,7 @@ def transcript_revenue(text):
     return None
 
 
-def prior_outlook(text, quarter, period_terms=()):
+def prior_outlook(text, quarter, period_terms=(), year=None):
     """Extract explicit revenue expectations; leave ambiguous periods unscored."""
     results = []
     ordinal = ("first", "second", "third", "fourth")[quarter - 1]
@@ -87,13 +88,20 @@ def prior_outlook(text, quarter, period_terms=()):
             if len(sentence) > 700:
                 continue
             context = " ".join(sentences[max(0, i - 1):i + 1])
+            # A forecast header can precede several segment remarks. Use the nearest explicit
+            # outlook header in this passage, including its stated fiscal year, not a distant quarter mention.
+            prefix = " ".join(sentences[:i])
+            headers = list(re.finditer(r"\b(?:outlook|guidance)\s+for\s+(?:the\s+|our\s+)?(Q[1-4]|(?:first|second|third|fourth|next) quarter|(?:full|fiscal) year)(?:\s+of\s+(?:fiscal\s+)?(?:year\s+)?(\d{4}))?", prefix, re.I))
+            header = headers[-1] if headers and len(prefix) - headers[-1].end() <= 1500 else None
+            header_year_ok = not header or not year or not header[2] or int(header[2]) == year
+            header_matches = bool(header and target.search(header[1]) and header_year_ok)
             if re.search(r"\b(?:above|below) our outlook\b", sentence, re.I) and not re.search(r"\bexpect|\banticipat", sentence, re.I):
                 continue
             segment = bool(re.search(r"\b(?:segment|Productivity and Business Processes|Intelligent Cloud|Personal Computing|Data Center|Services|iPhone|gaming)\b", sentence, re.I))
             currency_impact = bool(re.search(r"foreign exchange|currency (?:impact|headwind|tailwind)", sentence, re.I))
             entry = {"quote": sentence, "passage_id": passage["id"], "context": passage["text"],
                      "metric_scope": "currency_impact" if currency_impact else "segment_or_unclear" if segment else "company_revenue",
-                     "period_explicit": (bool(target.search(context)) or any(term.lower() in context.lower() for term in period_terms)) and not bool(re.search(r"\b(?:full year|annual|fiscal year)\b", context, re.I))}
+                     "period_explicit": header_year_ok and (header_matches or bool(target.search(context)) or any(term.lower() in context.lower() for term in period_terms)) and not bool(re.search(r"\b(?:full year|annual|fiscal year)\b", context, re.I))}
             # Scope a range to the revenue clause; do not use an EPS or expense range later in the sentence.
             forward_clause = sentence[future.start():]
             revenue_clause = re.split(r"\b(?:revenue|net sales)\b", forward_clause, maxsplit=1, flags=re.I)
@@ -237,7 +245,7 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
             previous = None
         if previous:
             prior.update(status="available", source_hash=source_hash(previous["content"]), report_date=previous.get("report_date"),
-                         outlooks=prior_outlook(previous["content"], quarter, actual.get("period_terms", []) if actual else []))
+                         outlooks=prior_outlook(previous["content"], quarter, actual.get("period_terms", []) if actual else [], year))
         else:
             prior.update(status="unavailable", message="The preceding fiscal call was not available.")
     except RuntimeError:

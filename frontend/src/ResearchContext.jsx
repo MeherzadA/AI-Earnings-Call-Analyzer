@@ -15,7 +15,8 @@ function Headline({ item }) {
 }
 
 export default function ResearchContext({ result, onSource, active }) {
-  const [context, setContext] = useState(result.context || result.research?.context || null);
+  const stored = result.context || result.research?.context;
+  const [context, setContext] = useState(stored?.version === 4 ? stored : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const attempted = useRef(false);
