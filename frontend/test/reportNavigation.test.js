@@ -13,11 +13,12 @@ test("share links preserve unrelated parameters and replace the prior report", (
   assert.equal(url, "https://example.com/?report=9&utm_source=github");
 });
 
-test("older stored statements use the current card model without invented evidence", () => {
+test("uncited legacy statements are never presented as findings", () => {
   const analysis = { sentiment: "positive", key_claims: ["Revenue increased 10%."], red_flags: ["Demand is uncertain."], opportunities: [] };
   const result = reportContent({ analysis });
-  assert.deepEqual(result.findings.map((item) => item.category), ["performance", "risks"]);
-  assert.ok(result.findings.every((item) => item.citations.length === 0));
+  assert.deepEqual(result.findings, []);
+  const checked = reportContent({research:{management_tone:"positive", findings:[{id:"kept", citations:[{quote:"A source excerpt"}]},{id:"hidden",citations:[]}],financial_highlights:[]}});
+  assert.deepEqual(checked.findings.map((item) => item.id), ["kept"]);
   assert.equal(analysis.key_claims[0], "Revenue increased 10%.");
   assert.equal(callDateLabel("2025-11-19"), "Nov 19, 2025");
   assert.equal(callDateLabel(null), "Date not recorded");

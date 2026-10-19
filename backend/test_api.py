@@ -111,45 +111,22 @@ class AnalysisFlowTests(unittest.TestCase):
             ai.assert_called_once()
             self.assertEqual(self.context.call_count, 3)
 
-    def test_older_report_loads_context_without_upgrading_or_calling_ai(self):
-        with database.SessionLocal() as db:
-            transcript = main.models.Transcript(ticker="NVDA", year=2023, quarter="4", raw_text=SOURCE)
-            db.add(transcript); db.flush()
-            db.add(main.models.Analysis(transcript_id=transcript.id, summary="Keep original", key_claims="[]", red_flags="[]", opportunities="[]", daily_prices=json.dumps([{"date":"2023-02-22","price":20.73}])))
-            db.commit()
-        context = {**CONTEXT, "call_date":"2023-02-22"}
-        with patch.object(main, "build_context", return_value=context) as provider, patch.object(main, "analyze_transcript") as ai:
-            self.assertEqual(self.client.post("/reports/1/context").status_code, 200)
-            self.assertTrue(self.client.post("/reports/1/context").json()["cached"])
-            report = self.client.get("/reports/1").json()
-            self.assertIsNone(report["research"])
-            self.assertEqual(report["context"], context)
-            self.assertEqual(report["analysis"]["summary"], "Keep original")
-            self.assertFalse(self.client.get("/history").json()["history"][0]["has_research"])
-            provider.assert_called_once(); ai.assert_not_called()
-
-    def test_readonly_report_and_transcript_do_not_generate(self):
+    def test_legacy_reports_are_retired_without_deleting_or_generating(self):
         with database.SessionLocal() as db:
             transcript = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text=SOURCE)
-            db.add(transcript)
-            db.flush()
-            db.add(main.models.Analysis(transcript_id=transcript.id, summary="Original summary", key_claims="[]", red_flags="[]", opportunities="[]"))
+            db.add(transcript); db.flush()
+            db.add(main.models.Analysis(transcript_id=transcript.id, summary="Keep original", key_claims='["Uncited statement"]', research_json=json.dumps({"context": CONTEXT})))
             db.commit()
         with patch.object(main, "analyze_transcript") as ai, patch.object(main, "fetch_transcript") as provider:
-            report = self.client.get("/reports/1").json()
-            self.assertIsNone(report["research"])
-            self.assertTrue(report["cached"])
-            self.assertEqual(report["analysis"]["summary"], "Original summary")
-            self.assertIsNone(self.client.post("/analyze", json={"ticker": "AAPL", "year": 2024, "quarter": 1}).json()["research"])
-            self.assertEqual(self.client.get("/reports/1/transcript").json()["passages"][0]["text"], SOURCE)
-            self.assertEqual(self.client.get("/examples").json()["examples"][0]["report_id"], 1)
-            example = self.client.get("/examples/AAPL").json()
-            self.assertEqual((example["report_id"], example["cached"]), (1, True))
-            self.assertEqual(self.client.get("/examples/NVDA").status_code, 404)
-            self.assertEqual(self.client.get("/examples/UNKNOWN").status_code, 404)
-            self.assertEqual(self.client.get("/reports/999").status_code, 404)
-            ai.assert_not_called()
-            provider.assert_not_called()
+            self.assertEqual(self.client.get("/history").json(), {"history": [], "total": 0})
+            self.assertEqual(self.client.get("/examples").json()["examples"], [])
+            self.assertEqual(self.client.get("/reports/1").status_code, 410)
+            self.assertEqual(self.client.get("/examples/AAPL").status_code, 410)
+            self.assertEqual(self.client.post("/reports/1/context").status_code, 410)
+            self.assertEqual(self.client.get("/reports/1/transcript").status_code, 200)
+            ai.assert_not_called(); provider.assert_not_called()
+        with database.SessionLocal() as db:
+            self.assertEqual(db.get(main.models.Analysis, 1).summary, "Keep original")
 
     def test_explicit_upgrade_preserves_original_fields_and_uses_one_call(self):
         with database.SessionLocal() as db:
@@ -206,13 +183,13 @@ class AnalysisFlowTests(unittest.TestCase):
     def test_an_older_unanalyzed_transcript_does_not_hide_a_saved_report(self):
         with database.SessionLocal() as db:
             orphan = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text="Earlier transcript")
-            saved = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text="Analyzed transcript")
+            saved = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text=SOURCE)
             db.add_all([orphan, saved])
             db.flush()
             db.add(main.models.Analysis(
                 transcript_id=saved.id, sentiment=REPORT["sentiment"],
                 sentiment_score=REPORT["sentiment_score"], summary=REPORT["summary"],
-                key_claims=json.dumps(REPORT["key_claims"]), red_flags="[]", opportunities="[]",
+                key_claims=json.dumps(REPORT["key_claims"]), red_flags="[]", opportunities="[]", research_json=json.dumps(RESEARCH),
             ))
             db.commit()
         with patch.object(main, "fetch_transcript", side_effect=AssertionError("A saved report must not call providers")):
@@ -272,7 +249,7 @@ class AnalysisFlowTests(unittest.TestCase):
                 transcript = main.models.Transcript(ticker=ticker, year=2024, quarter="1", raw_text="Test")
                 db.add(transcript)
                 db.flush()
-                db.add(main.models.Analysis(transcript_id=transcript.id, sentiment="neutral", return_1day=change))
+                db.add(main.models.Analysis(transcript_id=transcript.id, sentiment="neutral", return_1day=change, research_json=json.dumps(RESEARCH)))
             db.commit()
         queries = []
         def record_query(_connection, _cursor, statement, _parameters, _context, _many):

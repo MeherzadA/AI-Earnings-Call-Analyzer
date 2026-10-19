@@ -99,6 +99,13 @@ def saved_report(db, ticker, year, quarter):
     ).order_by(models.Analysis.id.desc()).first()
 
 
+def source_reports(db):
+    # Report JSON is written by json.dumps; context-only legacy records are not public briefs.
+    return db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(
+        models.Analysis.research_json.contains('"findings":')
+    )
+
+
 def stored_research(analysis):
     document = json.loads(analysis.research_json) if analysis.research_json else {}
     return document if "findings" in document else None
@@ -107,13 +114,11 @@ def stored_research(analysis):
 def report_response(transcript, analysis, cached=True):
     document = json.loads(analysis.research_json) if analysis.research_json else {}
     research = stored_research(analysis)
-    if research and research["source_hash"] != source_hash(transcript.raw_text):
+    if not research:
+        raise HTTPException(status_code=410, detail="This older report was retired because it has no saved supporting excerpts. Open a report from Call library, or analyze this company and fiscal quarter again.")
+    if research["source_hash"] != source_hash(transcript.raw_text):
         raise HTTPException(status_code=503, detail="This saved report no longer matches its transcript. Please run a new analysis.")
-    result = legacy_analysis(research) if research else {
-        "sentiment": analysis.sentiment, "sentiment_score": analysis.sentiment_score,
-        "summary": analysis.summary, "key_claims": json.loads(analysis.key_claims or "[]"),
-        "red_flags": json.loads(analysis.red_flags or "[]"), "opportunities": json.loads(analysis.opportunities or "[]"),
-    }
+    result = legacy_analysis(research)
     prices = json.loads(analysis.daily_prices or "[]")
     call_date = document.get("call_date") or (prices[0]["date"] if prices else None)
     ensure_past_call(call_date)
@@ -201,7 +206,7 @@ def report_with_context(transcript, analysis, db, cached=True):
 @app.get("/examples")
 def examples(db: Session = Depends(get_db)):
     periods = [(ticker, *period) for ticker, period in EXAMPLE_PERIODS.items()]
-    rows = db.query(models.Transcript, models.Analysis).join(models.Analysis).filter(
+    rows = source_reports(db).filter(
         tuple_(models.Transcript.ticker, models.Transcript.year, models.Transcript.quarter).in_(periods)
     ).order_by(models.Analysis.id.desc()).all()
     found = {}
@@ -232,10 +237,8 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     existing = saved_report(db, request.ticker, request.year, request.quarter)
     if existing and stored_research(existing[1]):
         stored = stored_research(existing[1])
-        if stored["source_hash"] == source_hash(existing[0].raw_text) or not request.with_research:
+        if stored["source_hash"] == source_hash(existing[0].raw_text):
             return report_with_context(*existing, db)
-    if existing and not request.with_research:
-        return report_response(*existing)
     # A single generation at a time protects the shared free-tier quota and instance memory.
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report is being prepared. Please try again shortly.")
@@ -289,9 +292,7 @@ def get_history(
     limit: int = Query(default=10, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
-    query = db.query(models.Transcript, models.Analysis).join(
-        models.Analysis, models.Analysis.transcript_id == models.Transcript.id
-    )
+    query = source_reports(db)
     if sort != "recent":
         query = query.filter(models.Analysis.return_1day.isnot(None))
     order = {
