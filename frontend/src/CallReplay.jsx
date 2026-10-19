@@ -40,7 +40,7 @@ function RecordingPlayer({ result, url, onReader, onPlayback, onTranscript }) {
       const { width, height } = canvas.current;
       drawing.clearRect(0, 0, width, height);
       for (let i = 0; i < 48; i++) {
-        drawing.fillStyle = i % 4 === 0 ? "#ffb552" : "#d4b5ff";
+        drawing.fillStyle = i % 4 === 0 ? "#ffd85c" : "#a7c8ff";
         const amplitude = Math.max(3, data[Math.floor(i * data.length / 48)] / 255 * (height - 8));
         drawing.fillRect(i * width / 48, (height - amplitude) / 2, width / 48 - 4, amplitude);
       }
@@ -98,7 +98,7 @@ function RecordingPlayer({ result, url, onReader, onPlayback, onTranscript }) {
       <div className="audio-transport"><button type="button" className="audio-play" onClick={togglePlayback} disabled={buffering && !playing} aria-label={playing ? "Pause call audio" : "Play call audio"}>{buffering ? <span className="spinner" /> : <span aria-hidden="true">{playing ? "Ⅱ" : "▶"}</span>}</button><button type="button" className="audio-skip" disabled={!duration} onClick={() => seek(position - 15)} aria-label="Skip back 15 seconds">↶<small>15</small></button><button type="button" className="audio-skip" disabled={!duration} onClick={() => seek(position + 15)} aria-label="Skip forward 15 seconds">↷<small>15</small></button><span className="audio-clock">{audioTime(position)} <span>/ {duration ? audioTime(duration) : "—:—"}</span></span><label className="sr-only" htmlFor="audio-speed">Playback speed</label><select id="audio-speed" className="audio-speed" defaultValue="1" onChange={(event) => { audio.current.playbackRate = Number(event.target.value); }}><option value="0.75">0.75×</option><option value="1">1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></div>
     </div>
     {error && <p className="audio-error" role="alert">{error}</p>}
-    <button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript →</button>
+    {onTranscript && <button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript →</button>}
     <p className="replay-credit">Original audio via <a href="https://earningscall.biz/docs/audio" target="_blank" rel="noreferrer">EarningsCall</a> · <a href={url} target="_blank" rel="noreferrer">Open audio source ↗</a> · <button type="button" onClick={() => onReader("You selected transcript read-aloud.")}>Use transcript read-aloud</button></p>
   </div>;
 }

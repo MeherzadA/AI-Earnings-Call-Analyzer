@@ -6,13 +6,13 @@ and post-earnings stock price reaction.
 
 The new report format prioritizes up to six findings with separate AI observations and interpretations, inspectable transcript excerpts, financial highlights, and saved report links. It uses one Gemini call per uncached analysis, followed by local source checks.
 
-The report uses a neutral research desk layout, with company marks and source-linked financial highlights in the header. The overview pairs a call replay and up to three key points (including a retained concern when available) with selectable source excerpts. A forecast/result comparison and a market chart sit underneath. Full Findings, Concerns, Market and Research views remain available without reloading the report. Source checking is explained separately from the business content.
+The app opens as a research workspace: saved calls on the left, the selected company and report in the center, and historical stock reaction on the right. The overview shows three source-linked financial highlights, call audio, a key finding and concern when retained, and an exact source quotation. Findings, Concerns, Market and Research tabs expose the remaining detail without reloading the report. Narrow screens stack the panels and collapse the saved-call browser.
 
 Call playback prefers the original recording: play/pause, a seek bar, 15-second skips, speed control, and a live Web Audio frequency display. Original audio streams on demand from [EarningsCall's public demo endpoint](https://earningscall.biz/docs/audio), which currently covers Apple and Microsoft; individual recordings may be missing or rate-limited. We do not claim that original recordings are available for every company.
 
 Every saved report, including older reports, also supports clearly labeled **transcript read-aloud** where the browser has a speech voice. It reads the stored transcript, after checking the report identity and source hash when available; it does not read an invented summary or impersonate executives. The browser speaks short text sections with pause/resume, section navigation, and speed control. Its activity animation is decorative, distinct from the original recording's frequency display. Missing or failed recordings use this fallback, and an original recording can be retried. No private provider key, paid plan, or extra Gemini call is involved. The app does not host recordings, synchronize quotations to recording timestamps, or assess vocal stress. Company marks are bundled locally from Simple Icons, with a ticker monogram for other companies.
 
-The homepage uses a violet, orange, and white research desk with brand-colored company marks, ticker search, saved examples, a historical one-day reaction strip and moves panel, and the report archive. The market panels reuse saved report returns; they are not live prices or a representation of the whole stock market. Curated headline figures are tied to the labeled historical call, not current quotes.
+The landing view opens a randomly selected existing source-based report instead of always featuring the same three companies. The saved-call sidebar supports sorting, previous/next browsing, and optional 18-second rotation. Rotation pauses while inspecting the report or transcript, editing the search, or listening to audio. These actions read stored reports; they do not generate AI analyses. The market panel uses saved historical returns and closing prices, not live quotes or a representation of the whole stock market.
 
 The overview separates the business takeaway and concern, stock reaction, and audio. Detailed findings and forecast comparisons have their own tabs. A prominent **Full transcript** button opens the original source. Computer read-aloud highlights the current section (individual words when the browser emits word-boundary events), scrolls with reading, and can be paused or resumed in the transcript viewer. Original recordings currently have no verified alignment with our stored transcript, so synchronized highlighting is unavailable for those recordings.
 
@@ -29,7 +29,7 @@ Prompt `evidence-brief-3` asks for critical reading of management remarks and an
 
 ![Report workspace preview](docs/images/report-workspace.png)
 
-*Workspace preview using the existing saved Apple Q1 FY2024 report; no new analysis was generated for the redesign.*
+*Workspace preview using the existing saved NVIDIA Q4 FY2024 report; no new analysis was generated for the redesign.*
 
 ## What it does
 
@@ -37,7 +37,7 @@ Type in a ticker, year, and quarter. The app fetches the earnings call transcrip
 runs it through Gemini AI, and returns a clean breakdown of what management said 
 and how the market reacted. Results are cached so repeat queries are instant.
 
-The homepage shows every previously analyzed companies, and can be sorted in a variety of ways
+The saved-call browser lists completed reports, with sorting and pagination.
 
 
 ## Stack

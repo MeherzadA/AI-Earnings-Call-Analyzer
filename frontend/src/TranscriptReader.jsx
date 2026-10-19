@@ -122,7 +122,7 @@ export default function TranscriptReader({ result, reason, onRecording, onPlayba
       </div>
     </div> : <p className="audio-error">This browser has no speech read-aloud support. The transcript remains available to read.</p>}
     {error && <p className="audio-error" role="alert">{error}</p>}
-    <div className="player-footer"><button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript & follow along →</button>{onRecording && <button type="button" className="text-btn" onClick={onRecording}>Try original recording</button>}</div>
+    {(onTranscript || onRecording) && <div className="player-footer">{onTranscript && <button type="button" className="follow-transcript-btn" onClick={onTranscript}>Read full transcript & follow along →</button>}{onRecording && <button type="button" className="text-btn" onClick={onRecording}>Try original recording</button>}</div>}
     <p className="replay-credit">Browser voice · Animation indicates reading activity. Transcript highlighting follows the spoken section; word tracking depends on your browser.</p>
   </div>;
 }

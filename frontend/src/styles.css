@@ -1,9 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
 
 :root {
-  --bg: #f5f1fc; --surface: #fff; --border: #e3dced; --border-strong: #c6b7dd;
-  --ink: #281b3a; --ink-2: #594d68; --ink-3: #756784; --accent: #6328ce;
-  --accent-light: #eee4ff; --navy: #6328ce; --green: #08785f; --gold: #aa5400; --critical: #bd2747;
+  --bg: #fbfcff; --surface: #fff; --border: #dfe5ef; --border-strong: #c8d2e2;
+  --ink: #17233c; --ink-2: #53637d; --ink-3: #6d7d94; --accent: #174fc4;
+  --accent-light: #edf3ff; --navy: #174fc4; --green: #08795c; --gold: #9d7717; --critical: #bd2747;
   --font: "IBM Plex Sans", "Segoe UI", sans-serif; --font-mono: "IBM Plex Mono", monospace;
   --serif: Georgia, "Times New Roman", serif;
 }
