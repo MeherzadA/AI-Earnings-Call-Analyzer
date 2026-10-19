@@ -6,6 +6,15 @@ from context import prior_outlook, compare_outlook, dated_news
 
 
 class ContextChecks(unittest.TestCase):
+    def test_disclaimer_and_past_results_are_not_forecasts(self):
+        text = ("Please note our forward-looking statements include revenue, gross margin and our future business outlook. "
+                "Today, Apple reported revenue of $111.2 billion, at the high end of our guidance range. "
+                "Mac revenue was $8.4 billion, driven by higher-than-expected demand. "
+                "For next quarter, we expect revenue growth in the low single digits.")
+        outlooks = prior_outlook(text, 3)
+        self.assertEqual(len(outlooks), 1)
+        self.assertIn("For next quarter, we expect", outlooks[0]["quote"])
+
     def test_quarter_range_compares_but_annual_or_wrong_metric_is_unscored(self):
         text = "For Q2, we expect revenue between $60.4 billion and $61.4 billion."
         result = compare_outlook(prior_outlook(text, 2), {"amount": Decimal(62_000_000_000), "value": "$62 billion"})

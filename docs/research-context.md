@@ -1,10 +1,12 @@
 # Research context
 
-The core business brief is still generated from one call transcript, with one Gemini call. Research context is a separate, explicit action in a saved source-based report. `POST /reports/{id}/context` fetches public sources and stores the resulting snapshot inside the existing nullable `research_json` field. Reopening or switching views does not generate another analysis or automatically refetch sources. Original report fields remain intact; no schema migration or new paid service is required.
+The core business brief is still generated from one call transcript, with one Gemini call. Opening Research context loads it automatically once; no second load button is required. `POST /reports/{id}/context` stores a snapshot inside the existing `research_json` field. Reopening a current cached context does not refetch sources or generate another analysis. Original report fields remain intact; no schema migration or paid service is required.
 
 ## Previous guidance and reported results
 
 The backend reuses a stored preceding fiscal transcript where available, otherwise retrieves that one call through the existing range-read provider. It extracts up to three short revenue-outlook sentences and preserves their original numbered passage context and source hash.
+
+Context version 2 requires explicit forward-looking language and rejects safe-harbor disclaimers and retrospective result/guidance comparisons. Older cached snapshots are rebuilt with the corrected selector, reusing existing external-source snapshots for the same call date. The UI separates the previous forecast and current result, explains why a numerical comparison is unavailable, and highlights the exact quotation in a short surrounding-context window.
 
 Only an identified quarterly, company-revenue range is compared with a comparable reported highlight. Explicit dollar ranges and plus/minus percentage tolerances are supported. The comparison reports above, within or below the stated range; it is not an analyst-consensus beat/miss. Annual guidance, known segment scopes, unclear fiscal-period references and missing comparable highlights remain unscored. Segment guidance is not added together or silently compared with total revenue.
 

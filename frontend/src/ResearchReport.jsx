@@ -82,9 +82,10 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
     {research ? <>
       <div className="report-intro"><span className="tone-tag">Management tone: {research.management_tone} <span>· AI assessment</span></span><button type="button" className="text-btn" onClick={() => openSource()}>Read transcript ↗</button></div>
       {view === "overview" && <>
-        <section className="financial-highlights" aria-label="Financial highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</section>
+        <section className="overview-financials" aria-labelledby="financials-title"><div className="overview-section-title"><h2 id="financials-title">Reported financials</h2><p>Q{result.quarter} FY{result.year} · Figures stated in this call</p></div><div className="financial-highlights">{research.financial_highlights.map((metric) => <article className="financial-highlight" key={metric.id}><h3>{metric.label}</h3><p className="financial-value">{metric.value}</p><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>
+        <div className="overview-section-title"><h2>AI findings</h2><p>{research.findings.length} total: {developments.length} developments and {concerns.length} concerns. The overview previews one of each.</p></div>
         <div className="overview-stories">
-          <section className="overview-story"><p className="eyebrow">KEY DEVELOPMENT</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>Explore {developments.length} findings ↗</button></section>
+          <section className="overview-story"><p className="eyebrow">DEVELOPMENT · AI OBSERVATION</p>{developments[0] ? <><h2>{developments[0].headline}</h2><p>{developments[0].observation}</p></> : <p>No other development was retained.</p>}<button type="button" className="text-btn" onClick={() => onViewChange("findings")}>View all {developments.length} developments ↗</button></section>
           <section className="overview-story overview-concern"><p className="eyebrow">CONCERN TO EXAMINE</p>{concerns[0] ? <><h2>{concerns[0].headline}</h2><p>{concerns[0].observation}</p></> : <><h2>Risk coverage is limited</h2><p>{emptyConcern}</p></>}<button type="button" className="text-btn" onClick={() => onViewChange("concerns")}>Inspect concerns & sources ↗</button></section>
         </div>
         <p className="source-scope">The brief reflects what management said. Matching a quotation does not independently verify the claim. <button type="button" className="text-btn" onClick={() => onViewChange("research")}>Compare with earlier guidance & outside context ↗</button></p>
@@ -96,7 +97,7 @@ export default function ResearchReport({ result, onUpgrade, view = "overview", o
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
-      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} /></div>
+      <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div>
       <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
         <p>Business findings use the call transcript. Every displayed citation was matched to that source; numeric values were compared with the cited text. This does not establish semantic support, independent truth, or complete risk coverage. Research context is separate and is not fed into a second AI report.</p>
         <p>Human review: <strong>not performed</strong>. {research.checks.discarded.length} proposed items were omitted by source checks.</p>

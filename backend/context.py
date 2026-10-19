@@ -14,6 +14,7 @@ from transcript import fetch_transcript
 
 USER_AGENT = os.getenv("SEC_USER_AGENT", "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)")
 NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
+CONTEXT_VERSION = 2
 
 
 def download(url, *, params=None, limit=8_000_000):
@@ -52,7 +53,11 @@ def prior_outlook(text, quarter):
         # Two adjacent sentences preserve simple introductory fiscal-period context.
         sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", passage["text"])
         for i, sentence in enumerate(sentences):
-            if not re.search(r"\b(revenue|net sales)\b", sentence, re.I) or not re.search(r"\b(expect|outlook|guidance|anticipate)", sentence, re.I):
+            if not re.search(r"\b(revenue|net sales)\b", sentence, re.I):
+                continue
+            # Mentioning 'guidance' or 'higher-than-expected' historical results is not a forecast.
+            future = re.search(r"\b(?:we|I|management|the company)\s+(?:(?:currently|now|still|also)\s+)?(?:expect|anticipate|project|forecast|estimate|believe)\b|\b(?:total\s+)?(?:company\s+)?(?:revenue|net sales)\s+(?:is|are)\s+(?:expected|projected|forecast)\s+to\b", sentence, re.I)
+            if not future or re.search(r"forward-looking statements|safe harbor|undue reliance", sentence, re.I):
                 continue
             if len(sentence) > 700:
                 continue
@@ -64,7 +69,9 @@ def prior_outlook(text, quarter):
                      "metric_scope": "segment_or_unclear" if segment else "company_revenue",
                      "period_explicit": bool(target.search(context)) and not bool(re.search(r"\b(?:full year|annual|fiscal year)\b", context, re.I))}
             # Scope a range to the revenue clause; do not use an EPS or expense range later in the sentence.
-            clause = re.split(r";|\b(?:EPS|earnings per share|operating expenses|operating income|gross margin)\b", re.split(r"\b(?:revenue|net sales)\b", sentence, maxsplit=1, flags=re.I)[1], flags=re.I)[0][:150]
+            forward_clause = sentence[future.start():]
+            revenue_clause = re.split(r"\b(?:revenue|net sales)\b", forward_clause, maxsplit=1, flags=re.I)
+            clause = re.split(r";|\b(?:EPS|earnings per share|operating expenses|operating income|gross margin)\b", revenue_clause[-1], flags=re.I)[0][:150]
             match = re.search(r"\$([\d.]+)\s*(billion|million)?\s*(?:to|and|–|-)\s*\$?([\d.]+)\s*(billion|million)", clause, re.I)
             tolerance = re.search(r"\$([\d.]+)\s*(billion|million),?\s*(?:plus or minus|\+/-)\s*([\d.]+)%", clause, re.I)
             if match:
@@ -85,7 +92,17 @@ def prior_outlook(text, quarter):
 def compare_outlook(outlooks, actual):
     match = next((item for item in outlooks if "low" in item and item["period_explicit"] and item["metric_scope"] == "company_revenue"), None)
     if not match or not actual:
-        return {"status": "unscored", "message": "A comparable quarterly revenue range and reported value were not both identified. No beat/miss judgment is made."}
+        if not actual:
+            reason = "This report has no comparable total-company quarterly revenue value."
+        elif not outlooks:
+            reason = "No explicit revenue forecast was identified in the preceding call. Past results and disclaimer language are excluded."
+        elif not any(item.get("metric_scope") == "company_revenue" for item in outlooks):
+            reason = "The earlier forecasts concern business segments, not total-company revenue. Those figures cannot fairly be compared."
+        elif not any("low" in item for item in outlooks):
+            reason = "The earlier forecast does not provide a supported numerical revenue range."
+        else:
+            reason = "The earlier range could not be confidently tied to this same fiscal quarter and revenue scope."
+        return {"status": "unscored", "message": reason}
     value, low, high = actual["amount"], Decimal(match["low"]), Decimal(match["high"])
     position = "above" if value > high else "below" if value < low else "within"
     return {"status": "compared", "position": position, "range": f"{money(low)}–{money(high)}",
@@ -188,11 +205,16 @@ def build_context(ticker, year, quarter, research, call_date, previous=None):
     if actual:
         comparison["reported"] = {key: value for key, value in actual.items() if key != "amount"}
     sections = {}
+    cached = research.get("context", {})
     for name, provider in (("news", lambda: dated_news(ticker, call_date)), ("filings", lambda: filing_context(ticker, call_date, year, quarter))):
+        if cached.get("call_date") == call_date and cached.get(name):
+            sections[name] = cached[name]
+            continue
         try:
             sections[name] = provider()
         except (requests.RequestException, RuntimeError, ValueError, KeyError, ET.ParseError) as error:
             sections[name] = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "This source could not be loaded.", "items": [], "facts": []}
-    return {"version": 1, "call_date": call_date, "loaded_at": datetime.now(timezone.utc).isoformat(), "previous_call": prior,
+    return {"version": CONTEXT_VERSION, "call_date": call_date, "loaded_at": datetime.now(timezone.utc).isoformat(),
+            "external_sources_loaded_at": cached.get("external_sources_loaded_at", cached.get("loaded_at")) if cached.get("call_date") == call_date else datetime.now(timezone.utc).isoformat(), "previous_call": prior,
             "comparison": comparison, **sections,
             "scope": "No extra AI generation. Prior-call extraction, stated-value arithmetic, SEC data when reachable, and dated headline links. These sources do not establish impartiality or report accuracy."}
