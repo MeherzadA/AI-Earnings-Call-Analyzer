@@ -64,6 +64,20 @@ class AnalysisFlowTests(unittest.TestCase):
                     self.assertEqual(response.status_code, 422)
             transcript.assert_not_called()
 
+    def test_context_is_cached_without_another_model_call(self):
+        with patch.object(main, "fetch_transcript", return_value={"content": SOURCE}), patch.object(main, "analyze_transcript", return_value=REPORT), patch.object(main, "get_stock_returns", return_value={}):
+            report = self.client.post("/analyze", json={"ticker": "AAPL", "year": 2024, "quarter": 1}).json()
+        with patch.object(main, "build_context", return_value={"call_date": "2024-02-01", "version": 1}) as context, patch.object(main, "analyze_transcript") as ai:
+            first = self.client.post(f"/reports/{report['report_id']}/context").json()
+            second = self.client.post(f"/reports/{report['report_id']}/context").json()
+            self.assertFalse(first["cached"])
+            self.assertTrue(second["cached"])
+            context.assert_called_once()
+            ai.assert_not_called()
+            reopened = self.client.get(f"/reports/{report['report_id']}").json()
+            self.assertEqual(reopened["research"]["context"], first["context"])
+            self.assertEqual(reopened["analysis"], report["analysis"])
+
     def test_readonly_report_and_transcript_do_not_generate(self):
         with database.SessionLocal() as db:
             transcript = main.models.Transcript(ticker="AAPL", year=2024, quarter="1", raw_text=SOURCE)

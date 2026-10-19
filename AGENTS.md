@@ -34,4 +34,5 @@
 - `transcript.py` reads only the requested call remotely; it does not download the full dataset.
 - `analysis.py` calls `google-genai` (Gemini) and expects valid JSON output.
 - `research.py` validates cited excerpts and numeric consistency; these checks do not establish semantic accuracy. `evaluate.py` prepares/imports explicit human labels without model calls.
+- `context.py` loads optional prior-call, SEC and dated-headline context without LLM calls. Context is cached inside `research_json`; show provider failures and ambiguous comparisons honestly. Report view buttons must not mutate the URL or refetch a saved report.
 - Existing databases need `backend/migrations/001_research_reports.sql` before this version starts. Preserve original report fields and never label pending human review as complete.

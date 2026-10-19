@@ -6,16 +6,20 @@ and post-earnings stock price reaction.
 
 The new report format prioritizes up to six findings with separate AI observations and interpretations, inspectable transcript excerpts, financial highlights, and saved report links. It uses one Gemini call per uncached analysis, followed by local source checks.
 
-Market reaction appears near the top, with direct links to concerns and key developments. Concerns have a dedicated section; an empty section explicitly does not mean there are no risks. Business findings currently use the call transcript only. Prior-quarter comparisons, SEC-filing checks and independent news context are future work. Prompt `evidence-brief-3` asks for critical reading of management remarks and analyst Q&A; the initial evaluation below covers earlier prompt versions, not measured reliability of this revision.
+The report opens in a dashboard with the brief and market chart side by side on desktop. Overview, Findings, Concerns, Market and Research context are stateful views, so changing views does not reload the report. An empty concerns view explicitly does not mean there are no risks.
+
+The business brief uses the call transcript. Optional Research context fetches and caches the preceding call, a conservative prior revenue-outlook comparison, dated headline links and SEC data when reachable. It makes no additional Gemini call. Ambiguous periods and segment/total mismatches are left unscored; headline metadata is not verified article content. Automated SEC access returned HTTP 403 during development, so the app shows an unavailable state and direct filing links rather than claiming a successful check. Read [research context scope and limitations](docs/research-context.md).
+
+Prompt `evidence-brief-3` asks for critical reading of management remarks and analyst Q&A; the initial evaluation below covers earlier prompt versions, not measured reliability of this revision.
 
 **Reliability:** exact quote and numeric checks do not establish semantic accuracy. Three development candidates retained 11 of 18 proposed findings after mechanical checks. A separate AI assessment of 18 selected statements judged 12 supported and 6 insufficiently supported; the six interpretations were removed from the curated examples. These are fallible AI judgments. **No independent human review has been performed.** Read the [evaluation method, observed failures, and limitations](docs/evaluation.md); these counts are not a general accuracy rate.
 
 **Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). The evidence-report release was verified publicly on October 18, 2026 with a fresh [Microsoft Q2 2024 report](https://earnings-analyzer-vercel2.vercel.app/?report=20), stock prices, transcript viewing, and saved-link reopening. See [deployment notes](docs/deployment.md).
 
 
-![Public source-linked report](docs/images/evidence-report.png)
+![Report workspace preview](docs/images/report-workspace.png)
 
-*Public interface with a real saved Microsoft analysis and expandable evidence.*
+*Workspace preview using the existing saved Microsoft analysis; the market chart stays beside the brief on desktop.*
 
 ## What it does
 
