@@ -170,6 +170,53 @@
 .market-v2 .price-details p { font-size:12px; line-height:1.8; color:#6b7990; }
 .market-explore { min-height:42px; border:0; border-radius:5px; background:#ecf2fd; color:#2455b8; font-size:13px; font-weight:600; }
 .research-digest { display:flex; flex-direction:column; gap:21px; }
+.revenue-diff { border:1px solid #ccd6e4; border-radius:9px; overflow:hidden; background:white; }
+.diff-file-heading { padding:15px 21px; background:#edf2f8; display:flex; flex-wrap:wrap; justify-content:space-between; gap:7px 20px; font-size:14px; color:#334e71; border-bottom:1px solid #ccd6e4; }
+.diff-file-heading span { font-family:var(--font-mono); font-size:12px; }
+.diff-result { display:flex; align-items:start; gap:15px; padding:23px; border-bottom:1px solid #dbe3ed; }
+.diff-result > span { font:700 27px var(--font-mono); color:#3564a1; }
+.diff-result h3 { font:750 22px/1.5 var(--display); color:#152d49; }
+.diff-result p { font-size:15px; line-height:1.8; color:#536783; margin-top:6px; }
+.diff-columns { display:grid; grid-template-columns:1fr 1fr; }
+.diff-columns article { min-width:0; display:flex; flex-direction:column; }
+.diff-columns article + article { border-left:1px solid #ccd6e4; }
+.diff-columns header { padding:19px 21px; background:#fff7e6; border-bottom:1px solid #e7d8b7; }
+.diff-columns .actual-side header { background:#eaf3ff; border-color:#c8daf2; }
+.diff-step { font:600 12px/1.5 var(--font-mono); letter-spacing:.7px; color:#845b16; }
+.actual-side .diff-step { color:#23558f; }
+.diff-columns h4 { font:750 20px/1.5 var(--display); margin:9px 0 5px; color:#1b334e; }
+.diff-columns header p { font-size:13px; line-height:1.8; color:#5e6e83; }
+.diff-value { padding:22px 21px; min-height:125px; border-bottom:1px solid #e5eaf1; }
+.diff-value strong { display:block; font:700 25px/1.5 var(--display); color:#183758; overflow-wrap:anywhere; }
+.diff-value span { display:block; font-size:14px; line-height:1.7; color:#62728b; margin-top:6px; }
+.diff-evidence { padding:20px 21px; }
+.diff-evidence > p { font:650 12px var(--display); text-transform:uppercase; letter-spacing:.5px; color:#6d7890; margin-bottom:12px; }
+.diff-evidence blockquote,.unpaired-actual blockquote { margin:0 0 15px; padding-left:14px; border-left:3px solid #d7b452; font-size:15px; line-height:1.85; color:#2e425e; overflow-wrap:anywhere; }
+.actual-side blockquote { border-color:#628dcc; }
+.diff-evidence small { font-size:12px; color:#6d7a90; line-height:1.7; }
+.diff-scope { padding:19px 22px; border-top:1px solid #dbe3ed; background:#f7f9fc; }
+.diff-scope > strong { font-size:14px; color:#304e73; }
+.diff-scope p,.comparison-footnote { font-size:13px; line-height:1.85; color:#63738c; margin-top:8px; }
+.no-fair-comparison { padding:24px; }
+.no-fair-comparison h3 { font:700 21px/1.5 var(--display); margin-bottom:12px; }
+.no-fair-comparison > p { font-size:15px; line-height:1.85; color:#63738c; }
+.unpaired-actual { margin-top:20px; padding:20px; border:1px solid #dbe3ef; border-radius:6px; }
+.unpaired-actual > span { display:block; font-size:13px; color:#6a7890; }
+.unpaired-actual > strong { display:block; font:700 25px var(--display); margin:10px 0 18px; }
+.filing-status-note { border-left:3px solid #d4ab4e; padding:15px 19px; background:#faf7ef; color:#775c2f; }
+.filing-status-note > strong { font-size:14px; }
+.filing-status-note p { font-size:13px; line-height:1.8; margin:7px 0; }
+.filing-status-note a { font-size:13px; }
+.source-retry { align-self:start; }
+.market-status,.market-explanation,.price-provider { color:#62728b; font-size:13px; line-height:1.85; }
+.market-explanation { padding:17px 20px; border-left:3px solid #b9cce7; background:#f6f8fc; }
+.market-v2 .price-provider { font-size:12px; }
+.daily-closes h3 { font:700 16px var(--display); margin-bottom:13px; }
+.daily-closes-scroll { max-height:270px; overflow:auto; border:1px solid #dce4ef; border-radius:6px; }
+.daily-closes table { width:100%; font-size:13px; border-collapse:collapse; }
+.daily-closes th,.daily-closes td { padding:11px 15px; border-bottom:1px solid #e8edf4; text-align:left; white-space:nowrap; }
+.daily-closes thead th { position:sticky; top:0; background:#eff3f9; color:#446083; }
+@media(max-width:760px) { .diff-columns { grid-template-columns:1fr; } .diff-columns article + article { border-left:0; border-top:2px solid #ccd6e4; } .diff-file-heading,.diff-result,.diff-scope,.no-fair-comparison { padding:17px; } .diff-result h3 { font-size:20px; } .diff-value { min-height:0; } .diff-value strong { font-size:23px; } }
 .digest-heading h2 { font:750 29px/1.3 var(--display); letter-spacing:-.8px; margin:6px 0 10px; }
 .digest-heading > p:last-child { color:#60718b; font-size:16px; line-height:1.8; }
 .research-loading { display:flex; align-items:center; gap:16px; padding:24px; background:white; border:1px solid #dce4ef; border-radius:8px; }

@@ -63,6 +63,23 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(history["history"][0]["ticker"], "AAPL")
             self.assertEqual(history["history"][0]["call_date"], "2024-02-01")
 
+    def test_longer_prices_preserve_the_brief_and_reuse_the_cached_window(self):
+        initial = {"return_1day": 1, "return_5day": 5, "daily_prices": [{"date":"2024-02-01", "price":100 + i} for i in range(6)]}
+        with patch.object(main, "fetch_transcript", return_value={"content":SOURCE, "report_date":"2024-02-01"}), patch.object(main, "analyze_transcript", return_value=REPORT), patch.object(main, "get_stock_returns", return_value=initial):
+            original = self.client.post("/analyze", json={"ticker":"AAPL", "year":2024, "quarter":1}).json()
+        path = f"/reports/{original['report_id']}/prices"
+        extended = {**initial, "daily_prices":[{"date":"2024-02-01", "price":100 + i} for i in range(22)]}
+        with patch.object(main, "get_stock_returns", return_value={}) as prices, patch.object(main, "analyze_transcript") as ai:
+            self.assertEqual(self.client.post(path).status_code, 503)
+            self.assertEqual(self.client.get(f"/reports/{original['report_id']}").json()["daily_prices"], initial["daily_prices"])
+            prices.return_value = extended
+            response = self.client.post(path).json()
+            self.assertEqual(len(response["daily_prices"]), 22)
+            self.assertEqual(response["analysis"], original["analysis"])
+            self.assertEqual(self.client.post(path).json()["daily_prices"], response["daily_prices"])
+            self.assertEqual(prices.call_count, 2)
+            ai.assert_not_called()
+
     def test_future_call_date_is_rejected_before_generation_not_by_fiscal_year(self):
         main.ensure_past_call("2025-11-19")  # NVIDIA fiscal 2026 was reported in calendar 2025.
         with patch.object(main, "fetch_transcript", return_value={"content": SOURCE, "report_date": "2099-11-19"}), patch.object(main, "analyze_transcript") as ai:

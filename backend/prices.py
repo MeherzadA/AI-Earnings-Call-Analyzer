@@ -68,9 +68,9 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
         earnings_date_obj = datetime.strptime(earnings_date, "%Y-%m-%d")
         
         # Fetch stock data around the earnings date
-        # Get data from earnings_date to 2 weeks after to ensure we have trading days
+        # One month of trading sessions, allowing for weekends and market holidays.
         start_date = (earnings_date_obj - timedelta(days=1)).strftime("%Y-%m-%d")
-        end_date = (earnings_date_obj + timedelta(days=15)).strftime("%Y-%m-%d")
+        end_date = min(earnings_date_obj + timedelta(days=45), datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         
         data = yf.download(
             ticker.upper(), start=start_date, end=end_date, progress=False,
@@ -124,7 +124,7 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
             if five_day_date is not None else None
         )
         
-        # Collect daily prices for charting (earnings date + 5 trading days after)
+        # Keep up to 21 post-call sessions; existing 1-day and 5-day returns stay available.
         daily_prices = [
             {
                 "date": earnings_date,
@@ -133,7 +133,7 @@ def calculate_returns(ticker: str, earnings_date: str) -> dict:
             }
         ]
         
-        for i, trade_day in enumerate(trading_days[:5]):
+        for i, trade_day in enumerate(trading_days[:21]):
             close_price = float(close_prices.loc[trade_day])
             daily_prices.append({
                 "date": trade_day.strftime("%Y-%m-%d"),
