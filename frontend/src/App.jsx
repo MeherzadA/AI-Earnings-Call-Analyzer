@@ -20,7 +20,7 @@ function currentQuarter(date) {
   return 4;
 }
 
-function SearchBar({ onSubmit, loading, period }) {
+function SearchBar({ onSubmit, loading, period, reports }) {
   const today = useMemo(() => new Date(), []);
   const completedPeriod = useMemo(() => new Date(today.getFullYear(), today.getMonth() - 3, 1), [today]);
   const [ticker, setTicker] = useState("");
@@ -28,6 +28,25 @@ function SearchBar({ onSubmit, loading, period }) {
   const [quarter, setQuarter] = useState(currentQuarter(completedPeriod));
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [coverage, setCoverage] = useState(null);
+  const symbol = ticker.trim().toUpperCase();
+  const saved = reports.find((item) => item.ticker === symbol && item.year === Number(year) && Number(item.quarter) === Number(quarter));
+  const checked = coverage?.ticker === symbol ? coverage : null;
+  const selectedCall = checked?.periods?.find((item) => item.year === Number(year) && item.quarter === Number(quarter));
+  const unavailable = !saved && checked?.periods && !selectedCall;
+
+  useEffect(() => {
+    setCoverage(null);
+    if (loading || !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setCoverage({ticker:symbol, loading:true});
+      apiRequest(`/transcripts/${encodeURIComponent(symbol)}/periods`, {timeoutMs:15000}).then((data) => {
+        if (!cancelled) setCoverage(data);
+      }).catch(() => { if (!cancelled) setCoverage({ticker:symbol, error:true}); });
+    }, 650);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [symbol, loading]);
 
   useEffect(() => {
     if (period) { setTicker(period.ticker); setYear(period.year); setQuarter(period.quarter); }
@@ -90,13 +109,13 @@ function SearchBar({ onSubmit, loading, period }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!ticker.trim()) return;
+    if (!ticker.trim() || unavailable) return;
     setShowSuggestions(false);
     onSubmit({ ticker: ticker.trim(), year: Number(year), quarter: Number(quarter) });
   }
 
   return (
-    <form className="search-bar" onSubmit={handleSubmit} onBlur={(e) => {
+    <><form className="search-bar" onSubmit={handleSubmit} onBlur={(e) => {
       if (!e.currentTarget.contains(e.relatedTarget)) setShowSuggestions(false);
     }}>
       <div className="search-fields">
@@ -119,6 +138,7 @@ function SearchBar({ onSubmit, loading, period }) {
           />
           {showSuggestions && suggestions.length > 0 && (
             <div className="suggestions">
+              <p className="suggestion-source">Company matches · transcript coverage varies</p>
               {suggestions.map((item) => (
                 <button
                   type="button"
@@ -156,17 +176,20 @@ function SearchBar({ onSubmit, loading, period }) {
           </select>
         </div>
       </div>
-      <button className="analyze-btn" disabled={loading}>
+      <button className="analyze-btn" disabled={loading || unavailable}>
         {loading ? (
           <span className="btn-inner">
             <span className="spinner" /> {loading === "saved" ? "Opening report" : "Analyzing"}
           </span>
         ) : (
-          <span className="btn-inner">Analyze call</span>
+          <span className="btn-inner">{unavailable ? "No transcript" : saved ? "Open report" : "Analyze call"}</span>
         )}
       </button>
 
     </form>
+    {(symbol && (saved || checked)) && <div className={`call-coverage ${unavailable ? "coverage-missing" : ""}`} role="status" aria-live="polite">
+      {saved ? <p>Existing report · Call held {callDateLabel(saved.call_date)}</p> : selectedCall ? <p>Transcript available · Call held {callDateLabel(selectedCall.call_date)}</p> : checked?.loading ? <p>Checking transcript availability…</p> : checked?.error ? <p>Coverage couldn’t be checked. You can still try this call.</p> : checked?.periods?.length ? <><p>No {symbol} Q{quarter} FY{year} transcript in our current source. Available calls:</p><div className="coverage-periods">{checked.periods.slice(0, 6).map((item) => <button type="button" key={`${item.year}-${item.quarter}`} onClick={() => {setYear(item.year); setQuarter(item.quarter);}}>Q{item.quarter} FY{item.year}</button>)}</div></> : <p>No transcripts for {symbol} in our current source. Company search includes firms without transcript coverage.</p>}
+    </div>}</>
   );
 }
 
@@ -362,7 +385,7 @@ export default function App() {
     <header className="app-header"><div className="header-inner"><a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-name"><strong>Earnings</strong> Analyzer</span></a><nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()}>Reports</button><a href="/review.html">How it works</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub ↗</a></nav></div></header>
     <main className="main" id="main">
       {isHome && <header className="landing-heading"><div><h1>Earnings calls<span aria-hidden="true">.</span></h1><p>Transcripts, forecasts<br className="landing-title-break"/> and price moves.</p></div></header>}
-      <div className="desk-controls" hidden={Boolean(loading)}><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result || requestedPeriod} /><p className="period-help">{isHome ? "Fiscal years can differ from calendar years." : "Use the company’s fiscal year, which can differ from the call’s calendar year."}</p></section>{result && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
+      <div className="desk-controls" hidden={Boolean(loading)}><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result || requestedPeriod} reports={history} /><p className="period-help">{isHome ? "Fiscal years can differ from calendar years." : "Use the company’s fiscal year, which can differ from the call’s calendar year."}</p></section>{result && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className={`desk-grid view-${reportView} ${result ? "report-open" : "no-report"}`}>
         <section className="report-center" aria-label="Earnings call report" aria-busy={Boolean(loading)}>
