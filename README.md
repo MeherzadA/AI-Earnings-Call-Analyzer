@@ -1,105 +1,75 @@
 # Earnings Call Analyzer
 
-A full-stack investment research tool that turns earnings call transcripts into 
-structured AI-powered reports w/ sentiment, key claims, red flags, opportunities, 
-and post-earnings stock price reaction.
+Earnings calls are long, and the useful parts can be easy to miss. This app pulls together the main results, concerns, and management's outlook, with links back to the transcript so you can check the details yourself.
 
-The new report format prioritizes up to six findings with separate AI observations and interpretations, inspectable transcript excerpts, financial highlights, and saved report links. It uses one Gemini call per uncached analysis, followed by local source checks.
+Choose a company, fiscal year, and quarter, or open a report someone has already run.
 
-The app opens as a research workspace with a compact, searchable shared **Call library**, prominent report-view tabs, and historical price action alongside the brief. The overview separates blue development cards from amber concern cards. Audio stays compact; a quotation is shown only when a real matched excerpt exists. Public reports require source-linked findings. Phone layouts stack the panels without a permanent sidebar.
+**[Try the live app](https://earnings-analyzer-vercel2.vercel.app)**
 
-Call playback prefers the original recording: play/pause, a seek bar, 15-second skips, speed control, and a live Web Audio frequency display. Original audio streams on demand from [EarningsCall's public demo endpoint](https://earningscall.biz/docs/audio), which currently covers Apple and Microsoft; individual recordings may be missing or rate-limited. We do not claim that original recordings are available for every company.
-
-Every saved report, including older reports, also supports clearly labeled **transcript read-aloud** where the browser has a speech voice. It reads the stored transcript, after checking the report identity and source hash when available; it does not read an invented summary or impersonate executives. The browser speaks short text sections with pause/resume, section navigation, and speed control. Its activity animation is decorative, distinct from the original recording's frequency display. Missing or failed recordings use this fallback, and an original recording can be retried. No private provider key, paid plan, or extra Gemini call is involved. The app does not host recordings, synchronize quotations to recording timestamps, or assess vocal stress. Company marks are bundled locally from Simple Icons, with a ticker monogram for other companies.
-
-The landing view opens an existing source-based report. Legacy reports without saved supporting excerpts are retired from public listings and report links; their database records and transcripts are retained. An explicit analysis of that fiscal period upgrades its findings using the stored transcript. The UI never converts uncited legacy statements into finding cards. The shared call library supports ticker/date/year filtering, sorting and direct selection; these are public reports, not a personal saved list. Opening reports never generates AI analysis. Explicitly analysing an older report can upgrade its findings using its stored transcript.
-
-The call date and fiscal period are separate labels. A company's fiscal year can differ from the calendar year: [NVIDIA's fiscal Q3 2026 call took place November 19, 2025](https://investor.nvidia.com/news/press-release-details/2025/NVIDIA-Sets-Conference-Call-for-Third-Quarter-Financial-Results/default.aspx). A provider-supplied future call date is rejected before generation; a fiscal year ahead of the calendar year is not sufficient reason to reject a call.
-
-Stock returns compare regular-session closes on the displayed dates. They do not capture after-hours or intraday movements. Related coverage explicitly shows this timing distinction and the chart's actual comparison window. Headlines are not checked against the article's price window, so a rise described in a headline is not presented as equivalent to the next day's close-to-close return.
-
-Transcript read-aloud prefers English voices marked natural, neural, enhanced, or premium when the browser exposes them. Voice settings offer the available alternatives. This uses the browser's existing speech service; quality depends on the browser/device, and the app does not supply a paid neural-voice service.
-
-The overview separates the business takeaway and concern, stock reaction, and audio. Detailed findings and forecast comparisons have their own tabs. A prominent **Full transcript** button opens the original source. Computer read-aloud highlights the current section (individual words when the browser emits word-boundary events), scrolls with reading, and can be paused or resumed in the transcript viewer. Original recordings currently have no verified alignment with our stored transcript, so synchronized highlighting is unavailable for those recordings.
-
-Research works independently of the AI-report version. Every report can retrieve and cache the preceding call, conservative outlook comparison, dated headline links without Gemini. For older reports, an optional literal revenue extraction requires explicit company/quarter scope and preserves exact source offsets; ambiguous values remain unscored. Context is stored with a source hash in the existing nullable `research_json` column without changing original analysis fields. Context-only documents are never treated as source-checked AI reports. The view separates the forecast and actual result for the same quarter, with visible evidence and related coverage.
-
-The market view switches between closing prices and cumulative return, with 1-day, 5-day and 1-month (21 trading sessions) windows. Existing reports load and cache the longer window without Gemini; a failed request preserves their stored prices. Recent calls show only available sessions. Dated tooltips, a shared call-close baseline and a visible daily table make the windows explicit. Endpoint returns use stored provider precision; intermediate and monthly returns use displayed rounded closes. Longer windows include unrelated news, and there is no invented benchmark or intraday data.
-
-Every new analysis prepares Research context before returning, alongside the source-linked business brief. Cached analyses can retry missing context without another Gemini call; successful source responses remain cached, while unavailable sources can be retried automatically when opening Research or with **Retry unavailable sources**. Retired records remain stored for recovery; they return to the public library only after an explicit source-based analysis. The business brief uses the call transcript. Research context fetches and caches the preceding call, a conservative prior revenue-outlook comparison, dated headline links. It makes no additional Gemini call. Ambiguous periods and segment/total mismatches are left unscored; headline metadata is not verified article content. The nonfunctional SEC integration has been removed: there are no SEC requests, filing panels, or filing-verification claims. Read [research context scope and limitations](docs/research-context.md).
-
-Prompt `evidence-brief-3` asks for critical reading of management remarks and analyst Q&A; the initial evaluation below covers earlier prompt versions, not measured reliability of this revision.
-
-**Reliability:** exact quote and numeric checks do not establish semantic accuracy. Three development candidates retained 11 of 18 proposed findings after mechanical checks. A separate AI assessment of 18 selected statements judged 12 supported and 6 insufficiently supported; the six interpretations were removed from the curated examples. These are fallible AI judgments. **No independent human review has been performed.** Read the [evaluation method, observed failures, and limitations](docs/evaluation.md); these counts are not a general accuracy rate.
-
-**Public demo:** [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app). The evidence-report release was verified publicly on October 18, 2026 with a fresh [Microsoft Q2 2024 report](https://earnings-analyzer-vercel2.vercel.app/?report=20), stock prices, transcript viewing, and saved-link reopening. See [deployment notes](docs/deployment.md).
-
+![The live homepage with saved earnings reports and NVIDIA's share price after its call](docs/images/readme-home.jpg)
 
 ## What it does
 
-Type in a ticker, year, and quarter. The app fetches the earnings call transcript,
-runs it through Gemini AI, and returns a clean breakdown of what management said 
-and how the market reacted. Results are cached so repeat queries are instant.
+- Uses Gemini to pull out key findings and financial highlights, with supporting transcript excerpts.
+- Shows stock price changes over the next trading day, five trading days, or a month.
+- Compares earlier revenue guidance with reported results when the periods and figures match, and shows related news links.
+- Lets you read the full transcript or listen with browser read-aloud. Original recordings are available for some calls.
+- Saves reports in a shared library with links you can reopen without running the AI again.
 
-The saved-call browser lists completed reports, with sorting and pagination.
+<details>
+<summary>See an example report</summary>
 
+![NVIDIA's Q4 2024 report with financial highlights, findings, transcript audio and share price history](docs/images/readme-report.jpg)
 
-## Stack
+</details>
 
-- **Backend:** FastAPI and SQLAlchemy on Render; PostgreSQL on Supabase Free
-- **Frontend:** React, Recharts, Vite: deployed on Vercel
-- **AI:** Google Gemini API for transcript analysis
-- **Data:** DuckDB reads the requested call from defeatbeta's public Parquet dataset using HTTP range requests; yfinance supplies post-earnings prices.
+## Built with
 
-## Running locally
-```bash
-# Backend
-cd backend
+React, Vite, and Recharts on the frontend. Python, FastAPI, SQLAlchemy, and PostgreSQL on the backend. Gemini handles the analysis, DuckDB reads transcripts from defeatbeta's public dataset, and yfinance supplies historical prices.
+
+The live app runs on Vercel, Render, and Supabase.
+
+## Run locally
+
+You'll need Python 3.11.17, Node.js, and a Gemini API key. These commands use PowerShell.
+
+Create `backend/.env`:
+
+```dotenv
+DATABASE_URL=sqlite:///./local-demo.db
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+SQLite works for local use. If you're using an existing PostgreSQL database, apply [this migration](backend/migrations/001_research_reports.sql) before starting.
+
+From the repository root, start the backend:
+
+```powershell
 python -m venv venv
-source venv/bin/activate  # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-
-# Create a .env file in /backend with:
-# DATABASE_URL=postgresql://...
-# GEMINI_API_KEY=...
-
+.\venv\Scripts\Activate.ps1
+pip install -r backend/requirements.txt
+cd backend
 uvicorn main:app --reload
 ```
-```bash
-# Frontend
+
+Create `frontend/.env`:
+
+```dotenv
+VITE_API_BASE_URL=http://127.0.0.1:8000
+```
+
+In a second terminal, from the repository root:
+
+```powershell
 cd frontend
 npm install
-# Create frontend/.env with VITE_API_BASE_URL=http://127.0.0.1:8000
 npm run dev
 ```
 
-## Features
-- AI analysis of US-listed companies with an available transcript for the selected fiscal period
-- Small qualitative management-tone indicator, labeled as an AI assessment
-- Post-earnings stock price chart (earnings date + 5 trading days)
-- Cached analyses with sort by recency, largest movement, top gainers, biggest drops
-- Database caching where analyzed transcripts are stored and served instantly on 
-  repeat requests
-- Optional ticker autocomplete using `VITE_FMP_API_KEY` (Financial Modeling Prep). Direct ticker entry works without it.
-- Source-linked observations and separately labeled interpretations; up to four financial highlights.
-- Read-only saved reports and transcript context, with shareable `?report=<id>` links.
-- Three curated saved calls and [18 source-linked AI assessments with reasons](https://earnings-analyzer-vercel2.vercel.app/review.html), preserving the original failure examples.
+Open [localhost:5173](http://localhost:5173). Transcript coverage varies by company and fiscal period.
 
-## Configuration and checks
+To run the checks, use `python -m unittest discover -s backend` from the root, then `npm run test` and `npm run build` from `frontend`.
 
-Use Python 3.11.17. Set `DATABASE_URL` and `GEMINI_API_KEY` in `backend/.env` locally or in the hosting service's environment. An existing, reachable PostgreSQL database is required for deployment; `render.yaml` does not provision or purchase one. For an isolated local demo, `DATABASE_URL=sqlite:///./local-demo.db` also works.
+## A note on accuracy
 
-For an existing PostgreSQL schema, back up reports and apply `backend/migrations/001_research_reports.sql` before starting this version. It adds the nullable `research_json` column; `create_all()` does not migrate existing tables. Original report fields remain stored when a report is upgraded. New empty databases receive the column from the ORM schema.
-
-`GEMINI_MODEL` optionally overrides the existing `gemini-2.5-flash` model. AI availability depends on the configured key's model access and quota. Set `VITE_API_BASE_URL` at frontend build time; without it the app uses the existing Render backend. Values prefixed with `VITE_` are public in the browser; keep backend credentials out of them.
-
-From the repository root:
-
-```bash
-python -m unittest discover -s backend
-cd frontend
-npm run test
-npm run build
-```
-
-The automated checks use temporary local storage and mock external providers. They never contact the production database or consume AI quota.
+The app checks quoted text and numbers against the transcript, but Gemini can still misread what they mean. Reports haven't had independent human review. The price chart shows what happened after a call, without proving what caused the move. See the [evaluation notes](docs/evaluation.md) for the checks and known limits.
