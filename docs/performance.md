@@ -1,114 +1,82 @@
 # Report latency and transcript coverage
 
-## Completion-time change: Flash-Lite with minimal thinking
+## Completion-time change: free-tier Flash-Lite
 
-The default is now `gemini-3.5-flash-lite`, with an explicit `minimal` thinking
-level. An explicit `GEMINI_MODEL=gemini-2.5-flash` still uses its previous
-1,024-token budget. Other model overrides keep their provider defaults.
-The full transcript, finding/highlight limits, risks, citation/numeric checks,
-research context, persistence and light UI remain in place. Prompt
-`evidence-brief-5` also clarifies that quotes must fit within their cited passage,
-using two citations for evidence crossing a boundary.
+The new default is `gemini-3.5-flash-lite` with explicit `minimal` thinking.
+`GEMINI_MODEL=gemini-2.5-flash` retains its 1,024-token budget; other overrides
+retain their provider defaults. Prompt `evidence-brief-5` requests compact JSON,
+avoids interpretations that repeat observations, and clarifies that each quote
+must fit within its cited passage. Full-transcript input, material findings and
+risks, financial highlights, citation/numeric checks, research, persistence and
+the light UI remain in place. No output-token cap or paid fallback was added.
 
-One real Flash-Lite request used report 27's exact 56,159-character transcript
-and the same `evidence-brief-4` prompt as the production 2.5 Flash run. It took
-**3.964 seconds**, versus **11.671 seconds** for 2.5 Flash: about 66% less model
-time in this individual observation. Flash-Lite generated 1,168 output tokens;
-the provider did not report a thought-token count (`None`, not a measured zero).
-It returned five candidate findings, four retained (including a licensing
-revenue risk), and four retained highlights. One quote spanning a passage
-boundary was rejected. The comparison ran locally against the real Gemini API;
-it excludes transcript retrieval, context and persistence, and is not a measured
-end-to-end production speedup. Different network paths and provider load limit
-causal precision.
+### Actual measurements on October 21, 2026
 
-**Quality tradeoff:** a smaller model with minimal thinking can omit material
-nuance or produce unsupported interpretations. Reviewing these excerpts is an
-AI inspection, not independent human evaluation or proof of equal accuracy.
-Source checks remain fail-closed and human review remains pending. No full
-transcript content is removed and no new output-token cap is imposed.
+| Request | Transcript, server | Gemini completion | Total, server | Completed saved response, client |
+| --- | ---: | ---: | ---: | ---: |
+| MSFT Q2 FY2022 baseline, report 26 | 4.800 s | 11.451 s | 16.317 s | not recorded |
+| MSFT Q3 FY2022, compact-output experiment, report 27 | 6.316 s | 11.671 s | 18.147 s | 18.309 s |
+| MSFT Q4 FY2022, Flash-Lite, report 28 | 5.996 s | 6.050 s | 12.230 s | 12.438 s |
 
-The earnings-analyzer project was verified in AI Studio as **Free tier** before
-the trial. Its displayed Flash-Lite limits were 15 RPM, 250K input TPM and 500
-RPD. [Google's pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite)
-lists free text input/output for that tier. Billing was not enabled, hosting
-was not upgraded, and there is no automatic paid-model fallback. Quotas and
-provider availability still apply; the displayed limits can change. See
-[thinking levels](https://ai.google.dev/gemini-api/docs/thinking#controlling-thinking)
-and the [model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite).
+Render deployed `57d7229` successfully. Its one fresh `POST /analyze/stream`
+created [report 28](https://earnings-analyzer-vercel2.vercel.app/?report=28),
+`cached: false`, with `evidence-brief-5` and the new model. Full server completion
+was about 25% shorter than the original 16.317-second baseline, and Gemini time
+about 47% shorter, despite slower transcript retrieval. This is one observed
+new-report result on a different fiscal call, not a controlled latency guarantee.
+The client timer ended on the completed, persisted `report` event, not a finding.
 
-### Initial output-compaction experiment
+The 53,868-character source had 42 passages. Four of six candidate findings
+survived (including two risks); two were rejected by numeric checks. All four
+highlights, prior-call research, dated news and 22 price points were present.
+Source hashes and every retained quote's exact offsets were verified against
+the full transcript, and the persisted report reopened unchanged. Gemini
+reported 1,283 output tokens and no thought-token count. No transcript prefetch
+or client POST retry was used. Together with the free model-only trial below,
+this used two additional free generations after the unsuccessful output-only
+experiment; there was no bulk test or paid comparison.
 
-The October 21 investigation confirmed Render was serving `aca0eb7`, with the
-repository at main merge `4fe7407`. Production logs contain the MSFT Q2 FY2022
-baseline: 4.800 seconds to retrieve the transcript, 11.451 seconds in Gemini,
-16.317 seconds total. The remaining time after subtracting retrieval and AI is
-0.066 seconds for that request; it does not establish that context providers
-always finish before Gemini. The baseline revision did not record output or
-thought token counts. Report 26 is saved and cannot benchmark fresh generation.
+The output-only experiment deployed as `050d594` did **not** demonstrate a
+speedup. Its 2.5 Flash run generated 1,488 output and 727 thought tokens.
+Baseline token counts were not recorded, so no output-token reduction can be
+claimed. Report 27 was uncached; its 56,159-character transcript had 43 passages.
+Four of six findings (including one risk) and all four highlights survived the
+checks; two quotations were rejected. Prior-call research, news and 22 daily
+prices were present, and the saved report reopened unchanged.
 
-Prompt `evidence-brief-4` requests compact JSON without formatting whitespace
-and tells the model to leave interpretation empty when it would merely repeat
-the observation. Useful interpretations, all 3–6 material findings, up to four
-financial highlights, exact quotations and qualifications remain requested.
-This targets tokens generated before completion. It does not shorten the input
-transcript, reduce reasoning, cap output tokens, or change the saved/API schema.
-During that experiment the default stayed `gemini-2.5-flash` with a 1,024-token thinking budget. Empty
-interpretations were already supported. Less repetitive prose is intended; no
-semantic-accuracy equivalence is claimed. Citation and numeric checks remain
-mechanical checks, with human review still pending.
+One real Flash-Lite request then used that **same complete transcript and the
+same prompt**. It finished in **3.964 seconds**, about 66% less model time than
+the 11.671-second production run. It generated 1,168 output tokens; thought-token
+usage was absent (`None`, not a measured zero). Four of five findings, including
+a licensing-revenue risk, and all four highlights survived; one quotation
+crossing a passage boundary was rejected. This request ran locally against
+Gemini: it excludes archive retrieval, context and persistence. Different
+network paths/provider load and one sample limit the comparison; it does not
+establish a general end-to-end speedup. No report was reopened as a fresh test.
 
-[Google's latency guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/consumption-options#reduce_latency)
-identifies fewer generated tokens as a way to reduce time to the last token and
-warns that a hard token cap can truncate output. We use a prompt instruction,
-not a hard cap. [Google's thinking guidance](https://ai.google.dev/gemini-api/docs/thinking)
-describes reasoning as additional work that can improve answer quality; disabling
-it would introduce a separate quality tradeoff. The [current model catalog](https://ai.google.dev/gemini-api/docs/models)
-still serves 2.5 Flash to existing users. [3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
-is a stable low-latency option with structured output and full-transcript-sized
-input capacity. Google's [3.1 Flash-Lite announcement](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-1-flash-lite/)
-reported faster output than 2.5 Flash on a provider-cited benchmark. Neither is
-production evidence for earnings-call analysis or establishes equivalent risk
-selection and interpretation quality. No model comparison, paid priority tier,
-hosting upgrade or additional AI pass was part of that initial experiment.
+**Quality tradeoff:** a lighter model with minimal thinking may miss nuance or
+produce unsupported interpretations. These excerpts received AI inspection,
+not independent human evaluation. Equal semantic accuracy is unproven; human
+review remains `not_reviewed`. Exact retained offsets and source hashes were
+checked against the full source, and invalid citations still fail closed.
 
-Prices and prior-call/headline retrieval already overlap generation; the successful
-request still waits for those sources and persistence. DuckDB's retained caches
-can help later archive reads but cannot guarantee a faster first read. Render
-Free sleep and provider load remain independent latency limits. The light UI
-is untouched. Correctness tests use mocked providers and establish no speedup.
-The one fresh post-deployment measurement below is separate from the saved
-baseline; a different call and provider load cannot establish causality or a
-general speedup. No bulk generations were run.
+AI Studio confirmed the earnings-analyzer project is **Free tier**, with
+Flash-Lite limits of 15 RPM, 250K input TPM and 500 RPD. Billing stayed disabled;
+hosting was not upgraded. [Google's pricing](https://ai.google.dev/gemini-api/docs/pricing#gemini-3.5-flash-lite)
+lists free text input/output for this tier. Limits and availability may change.
+The [model documentation](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+and [thinking controls](https://ai.google.dev/gemini-api/docs/thinking#controlling-thinking)
+describe its latency/quality settings. [Google's latency guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/consumption-options#reduce_latency)
+also supports reducing generated tokens, while warning that a hard cap can
+truncate responses. Provider benchmarks alone are not application evidence.
 
-### Fresh production result: no demonstrated speedup
-
-Render deployed `050d594` successfully on October 21, 2026. One
-`POST /analyze/stream` for previously unsaved **MSFT Q3 FY2022** created
-[report 27](https://earnings-analyzer-vercel2.vercel.app/?report=27), with
-`cached: false` and prompt version `evidence-brief-4`.
-
-| Measurement | MSFT Q2 FY2022 baseline | MSFT Q3 FY2022 after compact output |
-| --- | ---: | ---: |
-| Transcript readiness, server | 4.800 s | 6.316 s |
-| Gemini completion | 11.451 s | 11.671 s |
-| Completed report, server | 16.317 s | 18.147 s |
-| Completed saved report received, client | not recorded | 18.309 s |
-| Output / thought tokens | not recorded | 1,488 / 727 |
-
-This request did **not** demonstrate shorter AI or total completion time.
-First findings and prices arrived earlier, but are not the completion measure.
-The new call contained 56,159 transcript characters in 43 passages. Gemini
-returned six candidate findings: four survived source checks (including one
-risk), while two were rejected for quotations not found. All four highlights
-survived. Exact retained quotation offsets and the source hash were checked
-against the entire transcript. Prior-call research, dated news and 22 daily
-prices were present, and the persisted report reopened unchanged. These are
-mechanical correctness observations, not proof of semantic accuracy; human
-review remains `not_reviewed`. No POST retry or transcript prefetch was used.
-
-Output compaction alone is insufficient evidence to call completion speed fixed.
-That result motivated the separate free-tier Flash-Lite comparison above.
+Prices and prior-call/headline retrieval already overlap Gemini. Successful
+requests still await those sources and database persistence. Native DuckDB
+caches cannot guarantee a fast first archive read; Render Free sleep and
+provider load remain separate limits. The 54 backend tests, 10 frontend tests
+and production build passed; these correctness checks establish no speedup.
+Local checks used the existing Python 3.10 environment; production is configured
+for Python 3.11.17.
 
 ## Progressive delivery (earlier release)
 
