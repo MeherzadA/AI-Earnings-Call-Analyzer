@@ -29,47 +29,6 @@ React, Vite, and Recharts on the frontend. Python, FastAPI, SQLAlchemy, and Post
 
 The live app runs on Vercel, Render, and Supabase.
 
-## Run locally
+## Limits
 
-You'll need Python 3.11.17, Node.js, and a Gemini API key. These commands use PowerShell.
-
-Create `backend/.env`:
-
-```dotenv
-DATABASE_URL=sqlite:///./local-demo.db
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-SQLite works for local use. If you're using an existing PostgreSQL database, apply [this migration](backend/migrations/001_research_reports.sql) before starting.
-
-From the repository root, start the backend:
-
-```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r backend/requirements.txt
-cd backend
-uvicorn main:app --reload
-```
-
-Create `frontend/.env`:
-
-```dotenv
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-In a second terminal, from the repository root:
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-Open [localhost:5173](http://localhost:5173). Transcript coverage varies by company and fiscal period.
-
-To run the checks, use `python -m unittest discover -s backend` from the root, then `npm run test` and `npm run build` from `frontend`.
-
-## A note on accuracy
-
-The app checks quoted text and numbers against the transcript, but Gemini can still misread what they mean. Reports haven't had independent human review. The price chart shows what happened after a call, without proving what caused the move. See the [evaluation notes](docs/evaluation.md) for the checks and known limits.
+AI can misread a transcript even when the quotes and numbers match. Reports haven't had independent human review, and stock movements don't prove what caused them. [How reports are checked](docs/evaluation.md).
