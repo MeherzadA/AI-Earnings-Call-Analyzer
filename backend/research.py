@@ -8,7 +8,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-PROMPT_VERSION = "evidence-brief-3"
+PROMPT_VERSION = "evidence-brief-4"
 CHECK_VERSION = "source-checks-1"
 LIMITATION = "Matching source excerpts and numbers does not establish that an AI interpretation is supported or that management's statements are true."
 

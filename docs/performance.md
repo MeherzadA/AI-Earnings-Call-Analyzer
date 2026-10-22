@@ -1,5 +1,49 @@
 # Report latency and transcript coverage
 
+## Completion-time change: compact model output
+
+The October 21 investigation confirmed Render was serving `aca0eb7`, with the
+repository at main merge `4fe7407`. Production logs contain the MSFT Q2 FY2022
+baseline: 4.800 seconds to retrieve the transcript, 11.451 seconds in Gemini,
+16.317 seconds total. The remaining time after subtracting retrieval and AI is
+0.066 seconds for that request; it does not establish that context providers
+always finish before Gemini. The baseline revision did not record output or
+thought token counts. Report 26 is saved and cannot benchmark fresh generation.
+
+Prompt `evidence-brief-4` requests compact JSON without formatting whitespace
+and tells the model to leave interpretation empty when it would merely repeat
+the observation. Useful interpretations, all 3–6 material findings, up to four
+financial highlights, exact quotations and qualifications remain requested.
+This targets tokens generated before completion. It does not shorten the input
+transcript, reduce reasoning, cap output tokens, or change the saved/API schema.
+The default stays `gemini-2.5-flash` with a 1,024-token thinking budget. Empty
+interpretations were already supported. Less repetitive prose is intended; no
+semantic-accuracy equivalence is claimed. Citation and numeric checks remain
+mechanical checks, with human review still pending.
+
+[Google's latency guidance](https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/deploy/consumption-options#reduce_latency)
+identifies fewer generated tokens as a way to reduce time to the last token and
+warns that a hard token cap can truncate output. We use a prompt instruction,
+not a hard cap. [Google's thinking guidance](https://ai.google.dev/gemini-api/docs/thinking)
+describes reasoning as additional work that can improve answer quality; disabling
+it would introduce a separate quality tradeoff. The [current model catalog](https://ai.google.dev/gemini-api/docs/models)
+still serves 2.5 Flash to existing users. [3.5 Flash-Lite](https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite)
+is a stable low-latency option with structured output and full-transcript-sized
+input capacity. Google's [3.1 Flash-Lite announcement](https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-3-1-flash-lite/)
+reported faster output than 2.5 Flash on a provider-cited benchmark. Neither is
+production evidence for earnings-call analysis or establishes equivalent risk
+selection and interpretation quality. No model comparison, paid priority tier,
+hosting upgrade or additional AI pass is part of this change.
+
+Prices and prior-call/headline retrieval already overlap generation; the successful
+request still waits for those sources and persistence. DuckDB's retained caches
+can help later archive reads but cannot guarantee a faster first read. Render
+Free sleep and provider load remain independent latency limits. The light UI
+is untouched. Correctness tests use mocked providers and establish no speedup.
+A single fresh post-deployment report will be recorded below, separately from
+the saved baseline; a different call and provider load cannot establish causality
+or a general speedup. No bulk generations are authorized.
+
 ## Progressive delivery
 
 New calls use `POST /analyze/stream`. The call date and original transcript arrive first; the user can read that transcript while generation continues. Each complete finding passes the existing structure, quotation and numeric checks before it is sent. Prices arrive independently. The final event contains the persisted report, including its full research context. `/analyze` remains compatible with JSON clients. Interrupted streams do not cancel the background save. One admitted stream job and the existing generation limit prevent queued requests from multiplying memory use.

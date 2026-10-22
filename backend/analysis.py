@@ -74,8 +74,10 @@ does not establish deception. Preserve uncertainty and do not infer missing expl
 Each finding must cover ONE factual point, not a list of several results.
 Keep the headline under 60 characters, the observation under 220 characters, and the
 interpretation under 180 characters. Each observation and interpretation is one short sentence.
-Each finding needs a short headline, a concise factual observation, and a separate short
-interpretation. Every assertion in the headline and observation must be directly supported.
+Each finding needs a short headline and a concise factual observation. Add an interpretation
+only when it adds significance beyond the observation; otherwise use an empty string.
+Do not repeat the observation in the interpretation. Every assertion in the headline and
+observation must be directly supported.
 Interpretations must explain the significance of the cited facts, stay within their scope,
 and must not invent intentions, causes, forecasts or business actions. If the transcript only
 says sales rose, do not infer that stores will open. Leave interpretation empty if unwarranted.
@@ -92,7 +94,9 @@ convert percentages to basis points, spell out digits, or add uncited numbers in
 Include up to 4 material financial highlights (label, value, citations), only when explicitly
 reported. Copy the value with its scale/unit from the quotation. Do not invent missing metrics.
 Management tone is a qualitative assessment, not a probability or factual accuracy score.
-Return only the JSON matching the provided schema, without a separate summary.
+Return only compact JSON matching the provided schema, without a separate summary.
+Do not pretty-print: omit indentation, newlines and spaces outside JSON string values.
+Preserve all whitespace inside quotations exactly as it appears in the source.
 
 <transcript>
 {passages}
