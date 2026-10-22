@@ -197,6 +197,39 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(options.retry_options.http_status_codes, [500, 502, 503, 504])
             self.assertEqual(options.timeout, 30000)
 
+    def test_compact_stream_preserves_quotes_and_checks_a_late_transcript_risk(self):
+        from copy import deepcopy
+        from types import SimpleNamespace
+        from research import source_passages
+
+        quote = "Supply constraints could limit shipments despite strong demand."
+        transcript = SOURCE + " Background discussion. " * 160 + quote
+        draft = deepcopy(DRAFT)
+        draft["findings"].append({"category": "risks", "headline": "Supply constraints",
+            "observation": quote, "interpretation": "", "citations": [
+                {"passage_id": source_passages(transcript)[-1]["id"], "quote": quote}]})
+        raw = json.dumps(draft, separators=(",", ":"))
+        split = raw.index(quote) + 15
+        findings = []
+        with patch.dict(os.environ), patch.object(analysis.genai, "Client") as client:
+            os.environ.pop("GEMINI_MODEL", None)
+            generate = client.return_value.__enter__.return_value.models.generate_content_stream
+            generate.return_value.__iter__.return_value = iter([
+                SimpleNamespace(text=raw[:split], usage_metadata=None),
+                SimpleNamespace(text=raw[split:], usage_metadata=None)])
+            checked = analysis.analyze_transcript("AAPL", 2024, 1, transcript, findings.append)
+            self.assertEqual(generate.call_args.kwargs["model"], "gemini-3.5-flash-lite")
+            self.assertEqual(generate.call_args.kwargs["config"].thinking_config.thinking_level, "MINIMAL")
+            self.assertIn(quote, generate.call_args.kwargs["contents"])
+            generate.return_value.close.assert_called_once()
+        self.assertEqual(len(findings), 2)
+        risk = checked["research"]["findings"][-1]
+        self.assertEqual(risk["category"], "risks")
+        citation = risk["citations"][0]
+        self.assertEqual(transcript[citation["start"]:citation["end"]], quote)
+        self.assertEqual(risk["interpretation"], "")
+        self.assertEqual(checked["research"]["checks"]["human_review"], "not_reviewed")
+
     def test_ai_failure_returns_without_waiting_but_keeps_provider_concurrency_bounded(self):
         started, release, finished = Event(), Event(), Event()
         def sources(*args, **kwargs):

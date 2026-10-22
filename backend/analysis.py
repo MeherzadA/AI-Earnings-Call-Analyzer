@@ -74,8 +74,10 @@ does not establish deception. Preserve uncertainty and do not infer missing expl
 Each finding must cover ONE factual point, not a list of several results.
 Keep the headline under 60 characters, the observation under 220 characters, and the
 interpretation under 180 characters. Each observation and interpretation is one short sentence.
-Each finding needs a short headline, a concise factual observation, and a separate short
-interpretation. Every assertion in the headline and observation must be directly supported.
+Each finding needs a short headline and a concise factual observation. Add an interpretation
+only when it adds significance beyond the observation; otherwise use an empty string.
+Do not repeat the observation in the interpretation. Every assertion in the headline and
+observation must be directly supported.
 Interpretations must explain the significance of the cited facts, stay within their scope,
 and must not invent intentions, causes, forecasts or business actions. If the transcript only
 says sales rose, do not infer that stores will open. Leave interpretation empty if unwarranted.
@@ -83,6 +85,7 @@ Identify management projections as guidance, not accomplished results. Preserve 
 negations, qualifications and fiscal periods. Never use external knowledge or investment advice.
 
 For every finding cite 1 or 2 passage IDs with CONTIGUOUS VERBATIM excerpts of 12–700 characters.
+Each quotation must fit entirely within its cited passage; use two citations across a boundary.
 Prefer one short quotation under 450 characters; do not copy an entire paragraph.
 Copy spelling and punctuation exactly; no ellipses, stitched quotes or paraphrases in quotations.
 Cite enough context to support the entire observation, not just a matching number.
@@ -92,7 +95,9 @@ convert percentages to basis points, spell out digits, or add uncited numbers in
 Include up to 4 material financial highlights (label, value, citations), only when explicitly
 reported. Copy the value with its scale/unit from the quotation. Do not invent missing metrics.
 Management tone is a qualitative assessment, not a probability or factual accuracy score.
-Return only the JSON matching the provided schema, without a separate summary.
+Return only compact JSON matching the provided schema, without a separate summary.
+Do not pretty-print: omit indentation, newlines and spaces outside JSON string values.
+Preserve all whitespace inside quotations exactly as it appears in the source.
 
 <transcript>
 {passages}
@@ -100,7 +105,12 @@ Return only the JSON matching the provided schema, without a separate summary.
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("AI analysis is not configured on this server.")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    thinking_config = None
+    if model == "gemini-3.5-flash-lite":
+        thinking_config = types.ThinkingConfig(thinking_level="minimal")
+    elif model == "gemini-2.5-flash":
+        thinking_config = types.ThinkingConfig(thinking_budget=1024)
     started = perf_counter()
     first_finding = None
     usage = None
@@ -113,7 +123,7 @@ Return only the JSON matching the provided schema, without a separate summary.
             ),
         )) as client:
             config = types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ResearchDraft.model_json_schema(),
-                thinking_config=types.ThinkingConfig(thinking_budget=1024) if model == "gemini-2.5-flash" else None)
+                thinking_config=thinking_config)
             if on_finding:
                 raw = ""
                 seen = 0
