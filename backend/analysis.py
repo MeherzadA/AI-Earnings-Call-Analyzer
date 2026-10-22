@@ -107,8 +107,8 @@ Return only the JSON matching the provided schema, without a separate summary.
     try:
         with genai.Client(api_key=api_key, http_options=types.HttpOptions(
             timeout=30000, retry_options=types.HttpRetryOptions(
-                # Streaming cannot restart once any response has been delivered.
-                attempts=1 if on_finding else 2, initial_delay=1, max_delay=1,
+                # SDK retries HTTP startup, before reading chunks; it never replays a partial stream.
+                attempts=2, initial_delay=1, max_delay=1,
                 http_status_codes=[500, 502, 503, 504],
             ),
         )) as client:

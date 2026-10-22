@@ -33,6 +33,7 @@ export async function streamAnalysis(period, onEvent) {
       let end;
       while ((end = buffer.indexOf("\n\n")) !== -1) {
         consume(buffer.slice(0, end)); buffer = buffer.slice(end + 2);
+        if (report) return report;
       }
       if (done) break;
     }
