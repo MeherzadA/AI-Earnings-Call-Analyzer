@@ -85,6 +85,7 @@ Identify management projections as guidance, not accomplished results. Preserve 
 negations, qualifications and fiscal periods. Never use external knowledge or investment advice.
 
 For every finding cite 1 or 2 passage IDs with CONTIGUOUS VERBATIM excerpts of 12–700 characters.
+Each quotation must fit entirely within its cited passage; use two citations across a boundary.
 Prefer one short quotation under 450 characters; do not copy an entire paragraph.
 Copy spelling and punctuation exactly; no ellipses, stitched quotes or paraphrases in quotations.
 Cite enough context to support the entire observation, not just a matching number.
@@ -104,7 +105,12 @@ Preserve all whitespace inside quotations exactly as it appears in the source.
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("AI analysis is not configured on this server.")
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
+    thinking_config = None
+    if model == "gemini-3.5-flash-lite":
+        thinking_config = types.ThinkingConfig(thinking_level="minimal")
+    elif model == "gemini-2.5-flash":
+        thinking_config = types.ThinkingConfig(thinking_budget=1024)
     started = perf_counter()
     first_finding = None
     usage = None
@@ -117,7 +123,7 @@ Preserve all whitespace inside quotations exactly as it appears in the source.
             ),
         )) as client:
             config = types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ResearchDraft.model_json_schema(),
-                thinking_config=types.ThinkingConfig(thinking_budget=1024) if model == "gemini-2.5-flash" else None)
+                thinking_config=thinking_config)
             if on_finding:
                 raw = ""
                 seen = 0

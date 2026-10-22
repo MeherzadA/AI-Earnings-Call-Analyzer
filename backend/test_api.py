@@ -211,12 +211,15 @@ class AnalysisFlowTests(unittest.TestCase):
         raw = json.dumps(draft, separators=(",", ":"))
         split = raw.index(quote) + 15
         findings = []
-        with patch.object(analysis.genai, "Client") as client:
+        with patch.dict(os.environ), patch.object(analysis.genai, "Client") as client:
+            os.environ.pop("GEMINI_MODEL", None)
             generate = client.return_value.__enter__.return_value.models.generate_content_stream
             generate.return_value.__iter__.return_value = iter([
                 SimpleNamespace(text=raw[:split], usage_metadata=None),
                 SimpleNamespace(text=raw[split:], usage_metadata=None)])
             checked = analysis.analyze_transcript("AAPL", 2024, 1, transcript, findings.append)
+            self.assertEqual(generate.call_args.kwargs["model"], "gemini-3.5-flash-lite")
+            self.assertEqual(generate.call_args.kwargs["config"].thinking_config.thinking_level, "MINIMAL")
             self.assertIn(quote, generate.call_args.kwargs["contents"])
             generate.return_value.close.assert_called_once()
         self.assertEqual(len(findings), 2)
