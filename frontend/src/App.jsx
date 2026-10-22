@@ -205,7 +205,29 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const [featured, setFeatured] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState("");
+  const [stripPaused, setStripPaused] = useState(false);
+  const strip = useRef(null);
   const chart = useRef(null);
+  useEffect(() => {
+    if (stripPaused || history.length < 2) return;
+    const calls = strip.current;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let frame, previous = null, position = calls.scrollLeft, direction = 1;
+    function scrollCalls(time) {
+      const end = Math.max(0, calls.scrollWidth - calls.clientWidth);
+      if (reducedMotion.matches || calls.matches(":hover, :focus-within")) {
+        position = calls.scrollLeft;
+      } else if (previous !== null && end > 0) {
+        position = Math.max(0, Math.min(end, position + direction * Math.min(time - previous, 64) * 0.025));
+        calls.scrollLeft = position;
+        if (position === 0 || position === end) direction *= -1;
+      }
+      previous = time;
+      frame = requestAnimationFrame(scrollCalls);
+    }
+    frame = requestAnimationFrame(scrollCalls);
+    return () => cancelAnimationFrame(frame);
+  }, [history, stripPaused]);
   function previewCall(item) {
     setFeatured(item);
     if (window.matchMedia("(max-width:950px)").matches) chart.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -225,8 +247,8 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const excerpt = displayedPreview?.research?.findings?.find((finding) => finding.citations?.[0]?.quote)?.citations[0].quote;
   return <div className="landing-workstation">
     <section className="earnings-strip" aria-label="Choose a call to preview its price history">
-      <div className="earnings-strip-label"><strong>1-day returns</strong><span>Select a call</span></div>
-      <div className="earnings-strip-calls" role="group" aria-label="Preview a call">
+      <div className="earnings-strip-label"><strong>1-day returns</strong><span>Select a call{history.length > 1 && <button type="button" className="strip-motion-toggle" aria-pressed={stripPaused} aria-label={stripPaused ? "Resume stock strip animation" : "Pause stock strip animation"} title={stripPaused ? "Resume scrolling" : "Pause scrolling"} onClick={() => setStripPaused(!stripPaused)}><span aria-hidden="true">{stripPaused ? "▶" : "Ⅱ"}</span></button>}</span></div>
+      <div className="earnings-strip-calls" ref={strip} role="group" aria-label="Preview a call" onWheel={() => setStripPaused(true)} onPointerDown={() => setStripPaused(true)}>
         {history.map((item) => <button type="button" key={item.report_id} aria-pressed={featured?.report_id === item.report_id} aria-label={`Preview ${item.ticker}, ${callDateLabel(item.call_date)}, Q${item.quarter} FY${item.year}`} onClick={() => previewCall(item)}>
           <span className="strip-symbol">{item.ticker}<b className={returnTone(item.return_1day)}>{returnLabel(item.return_1day)}</b></span>
           <span className="strip-date">{callDateLabel(item.call_date)}<span>Q{item.quarter} FY{item.year}</span></span>
