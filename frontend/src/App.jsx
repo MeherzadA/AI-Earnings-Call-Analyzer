@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import MarketPanel from "./MarketPanel.jsx";
-import { apiRequest } from "./api.js";
-import ResearchReport, { SourceViewer } from "./ResearchReport.jsx";
+import { apiRequest, streamAnalysis } from "./api.js";
+import ResearchReport, { SourceViewer, FindingCard } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 import { callDateLabel } from "./reportPresentation.js";
 
@@ -260,6 +260,8 @@ export default function App() {
   const [requestedPeriod, setRequestedPeriod] = useState(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
+  const [pending, setPending] = useState(null);
+  const [previewSource, setPreviewSource] = useState(null);
   const [history, setHistory] = useState([]);
   const [sort, setSort] = useState("recent");
   const [limit, setLimit] = useState(20);
@@ -276,7 +278,7 @@ export default function App() {
   const requestNumber = useRef(0);
   const displayedReport = useRef(null);
   const callDate = result?.call_date || result?.research?.call_date || result?.daily_prices?.[0]?.date;
-  const isHome = !result && !loading;
+  const isHome = !result && !loading && !pending;
 
   useEffect(() => { setReportView("overview"); setSource(undefined); }, [result?.report_id]);
   useEffect(() => { if (reportView !== "overview") setPlayback(null); }, [reportView]);
@@ -302,13 +304,13 @@ export default function App() {
   }
   function goHome(push = true) {
     requestNumber.current += 1;
-    setResult(null); setError(""); setLoading(false); setPlayback(null);
+    setResult(null); setPending(null); setPreviewSource(null); setError(""); setLoading(false); setPlayback(null);
     setReportLocation(null, push);
   }
   async function loadReport(path, push = true, period = null) {
     const current = ++requestNumber.current;
     setRequestedPeriod(period);
-    setError(""); setResult(null); setPlayback(null); setLoading("saved");
+    setError(""); setResult(null); setPending(null); setPreviewSource(null); setPlayback(null); setLoading("saved");
     try {
       const data = await apiRequest(path, { timeoutMs: 90000 });
       if (current !== requestNumber.current) return;
@@ -347,13 +349,19 @@ export default function App() {
     const current = ++requestNumber.current;
     const previous = result?.ticker === ticker && result.year === year && result.quarter === quarter ? result : null;
     setRequestedPeriod({ ticker, year, quarter });
-    setError(""); setResult(null); setPlayback(null); setLoading("analysis");
+    setError(""); setResult(null); setPending(null); setPreviewSource(null); setPlayback(null); setLoading("analysis");
     try {
-      const data = await apiRequest("/analyze", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, year, quarter, with_research: true }) });
+      const data = await streamAnalysis({ticker, year, quarter}, (event) => {
+        if (current !== requestNumber.current) return;
+        if (event.type === "call") setPending({call:event, findings:[], prices:null});
+        if (event.type === "finding") setPending((value) => value ? {...value, findings:[...value.findings, event.finding]} : value);
+        if (event.type === "prices") setPending((value) => value ? {...value, prices:event} : value);
+      });
+      setRefreshKey((value) => value + 1);
       if (current !== requestNumber.current) return;
-      setResult(data); setReportLocation(data.report_id); setRefreshKey((value) => value + 1);
+      setResult(data); setPending(null); setReportLocation(data.report_id);
     } catch (err) {
-      if (current === requestNumber.current) { setError(err.message || "Something went wrong."); setResult(previous); }
+      if (current === requestNumber.current) { setError(err.message || "Something went wrong."); setResult(previous); setPending((value) => value ? {...value, findings:[], failed:true} : null); }
     } finally { if (current === requestNumber.current) setLoading(false); }
   }
   async function shareReport() {
@@ -369,12 +377,18 @@ export default function App() {
       <div className="desk-controls" hidden={Boolean(loading)}><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result || requestedPeriod} reports={history} /><p className="period-help">{isHome ? "Fiscal years can differ from calendar years." : "Use the company’s fiscal year, which can differ from the call’s calendar year."}</p></section>{result && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className={`desk-grid view-${reportView} ${result ? "report-open" : "no-report"}`}>
-        <section className="report-center" aria-label="Earnings call report" aria-busy={Boolean(loading)}>
-          {loading && <div className="loading-state report-loading" role="status" aria-live="polite">
+        <section className="report-center" aria-label="Earnings call report" aria-busy={Boolean(loading) && !pending}>
+          {loading && !pending && <div className="loading-state report-loading" role="status" aria-live="polite">
             {requestedPeriod && <div className="loading-call"><CompanyMark ticker={requestedPeriod.ticker} /><div><h1>{COMPANIES[requestedPeriod.ticker] || requestedPeriod.ticker}</h1><p>{requestedPeriod.ticker} · Q{requestedPeriod.quarter} FY{requestedPeriod.year}</p></div></div>}
             <div className="loading-bar"><div className="loading-fill" /></div>
-            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Loading report…"}<span>{loading === "saved" ? "Opening an existing report. No new analysis is needed." : "An existing report opens directly. A new call takes longer to analyse."}</span></p>
+            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Fetching the call transcript…"}<span>{loading === "saved" ? "Opening an existing report. No new analysis is needed." : "You can read the transcript as soon as it arrives."}</span></p>
             <div className="loading-actions"><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse reports</button></div>
+          </div>}
+          {pending && <div className="results pending-report">
+            <div className="report-heading"><div className="company-heading"><CompanyMark ticker={pending.call.ticker} /><div><div className="company-title-line"><h1>{COMPANIES[pending.call.ticker] || pending.call.ticker}</h1><span className="report-period">Fiscal Q{pending.call.quarter} · {pending.call.year}</span></div><p className="company-call-date">Call held <time>{callDateLabel(pending.call.call_date)}</time></p></div></div><button type="button" className="outline-btn" onClick={() => setPreviewSource({data:pending.call})}>Full transcript</button></div>
+            <div className="analysis-live-status" role="status"><span className={loading ? "spinner" : ""} aria-hidden="true"/><p>{pending.failed ? "The analysis could not finish. Your transcript is available." : pending.findings.length ? "Findings are arriving. Completing the remaining research…" : "Transcript ready. Analysing the call…"}</p><button type="button" className="text-btn" onClick={() => pending.failed ? handleSubmit(requestedPeriod) : goHome()}>{pending.failed ? "Try again" : "Browse reports"}</button></div>
+            {!pending.failed && <section aria-label="Findings as they arrive"><h2 className="stream-findings-heading">Findings{pending.findings.length ? ` · ${pending.findings.length}` : ""}</h2>{pending.findings.length ? <><p className="section-description">AI-generated findings. Each excerpt and its numbers are checked before display; the report is still being completed.</p><div className="findings-grid">{pending.findings.map((finding, index) => <FindingCard key={index} finding={finding} onSource={(citation) => setPreviewSource({data:pending.call, citation})} />)}</div></> : <p className="section-description">Findings will appear here after their transcript excerpts pass source checks. You can read the full transcript now.</p>}</section>}
+            {pending.prices?.daily_prices?.length > 0 && <div className="pending-prices"><MarketPanel result={{...pending.call, ...pending.prices}} compact /></div>}
           </div>}
           {isHome && <MarketLanding history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} onMore={() => setLimit((value) => value + 20)} />}
           {result && <div className="results">
@@ -399,6 +413,7 @@ export default function App() {
         {result && reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
       </div>
       {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} playback={playback} onClose={() => setSource(undefined)} />}
+      {previewSource && <SourceViewer initialData={previewSource.data} citation={previewSource.citation} expectedHash={previewSource.data.source_hash} onClose={() => setPreviewSource(null)} />}
     </main>
     <footer className="app-footer"><span>Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">defeatbeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span><a href="https://meherzad.tech" target="_blank" rel="noreferrer">Built by Meherzad Antia ↗</a></footer>
   </div>;

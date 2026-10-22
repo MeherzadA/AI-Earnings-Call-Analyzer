@@ -22,6 +22,7 @@ import logging
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor, wait
 from threading import Lock
+from queue import Queue, Empty
 from typing import Literal
 from datetime import datetime, timezone
 from time import perf_counter
@@ -30,9 +31,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, HTTPException, Depends, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 
-from database import engine, get_db
+from database import engine, get_db, SessionLocal
 
 import models
 
@@ -261,6 +263,8 @@ def read_example(ticker: str, db: Session = Depends(get_db)):
 # ponytail: one free Render process; use a distributed generation limit if scaled to multiple workers.
 generation_lock = Lock()
 report_workers = ThreadPoolExecutor(max_workers=2)
+stream_worker = ThreadPoolExecutor(max_workers=1)
+stream_lock = Lock()
 
 
 def release_generation_after(futures):
@@ -271,6 +275,62 @@ def release_generation_after(futures):
 
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
+    return build_report(request, db)
+
+
+@app.post("/analyze/stream")
+def analyze_stream(request: AnalyzeRequest):
+    # Admit one stream job rather than building an unbounded executor queue.
+    if not stream_lock.acquire(blocking=False):
+        raise HTTPException(status_code=429, detail="Another report is being prepared. Please try again shortly.")
+    # At most call + six findings + prices + report/error + sentinel (ten events).
+    events = Queue(maxsize=16)
+
+    def notify(event):
+        events.put_nowait(event)
+
+    def run():
+        try:
+            # This worker owns its session and can finish saving after a disconnect.
+            with SessionLocal() as db:
+                report = build_report(request, db, notify)
+            notify({"type": "report", "report": report})
+        except HTTPException as error:
+            notify({"type": "error", "detail": str(error.detail)})
+        except SQLAlchemyError:
+            logging.getLogger("uvicorn.error").error("Streaming report database operation failed")
+            notify({"type": "error", "detail": "Saved reports are temporarily unavailable. Please try again shortly."})
+        except Exception as error:
+            # Never log provider request bodies, source text or connection strings.
+            logging.getLogger("uvicorn.error").error("Streaming report failed (%s)", type(error).__name__)
+            notify({"type": "error", "detail": "This report could not be completed. Please try again shortly."})
+        finally:
+            notify(None)
+            stream_lock.release()
+
+    try:
+        stream_worker.submit(run)
+    except Exception:
+        stream_lock.release()
+        raise
+
+    def stream():
+        while True:
+            try:
+                event = events.get(timeout=15)
+            except Empty:
+                yield ": keep-alive\n\n"
+                continue
+            if event is None:
+                return
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no",
+    })
+
+
+def build_report(request: AnalyzeRequest, db: Session, notify=None):
     started = perf_counter()
     existing = saved_report(db, request.ticker, request.year, request.quarter)
     if existing and stored_research(existing[1]):
@@ -295,17 +355,30 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
                 raise HTTPException(status_code=404, detail=f"Our transcript source has no {request.ticker} fiscal Q{request.quarter} {request.year} call. A company appearing in stock search does not guarantee transcript coverage.")
         ensure_past_call(transcript.get("report_date"))
         logging.getLogger("uvicorn.error").info("Report %s Q%s FY%s transcript_seconds=%.3f", request.ticker, request.quarter, request.year, perf_counter() - started)
+        if notify:
+            notify({"type": "call", "ticker": request.ticker, "year": request.year,
+                    "quarter": request.quarter, "call_date": transcript.get("report_date"),
+                    "source_hash": source_hash(transcript["content"]), "passages": source_passages(transcript["content"])})
         previous_year, previous_quarter = (request.year, request.quarter - 1) if request.quarter > 1 else (request.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=request.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
         # Only provider calls run in workers; the SQLAlchemy session stays on this thread.
         workers = report_workers
-        prices = workers.submit(get_stock_returns, request.ticker, request.year, request.quarter, earnings_date=transcript.get("report_date")) if not existing else None
+        def fetch_prices():
+            returns = get_stock_returns(request.ticker, request.year, request.quarter, earnings_date=transcript.get("report_date"))
+            if notify:
+                notify({"type": "prices", "daily_prices": returns.get("daily_prices", []),
+                        "return_1day": returns.get("return_1day"), "return_5day": returns.get("return_5day")})
+            return returns
+        prices = workers.submit(fetch_prices) if not existing else None
         call_date = transcript.get("report_date")
         sources = workers.submit(fetch_context_sources, request.ticker, request.year, request.quarter, call_date, {"content": previous.raw_text} if previous else None) if call_date else None
         provider_work = [future for future in (prices, sources) if future]
         try:
-            result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
-                                        transcript_text=transcript["content"])
+            arguments = {"ticker": request.ticker, "year": request.year, "quarter": request.quarter,
+                         "transcript_text": transcript["content"]}
+            if notify:
+                arguments["on_finding"] = lambda finding: notify({"type": "finding", "finding": finding})
+            result = analyze_transcript(**arguments)
             result = {**result, "research": {**result["research"]}}
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error

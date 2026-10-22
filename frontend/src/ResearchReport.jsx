@@ -18,7 +18,7 @@ function Evidence({ citations, onSource }) {
   </details>;
 }
 
-function FindingCard({ finding, onSource }) {
+export function FindingCard({ finding, onSource }) {
   return <article className={`finding-card category-${finding.category}`}>
     <div className="finding-card-header"><p className="finding-subject">{SUBJECTS[finding.category]}</p></div>
     <div className="finding-body">
@@ -32,9 +32,9 @@ function FindingCard({ finding, onSource }) {
   </article>;
 }
 
-export function SourceViewer({ reportId, citation, expectedHash, playback, onClose }) {
+export function SourceViewer({ reportId, citation, expectedHash, playback, initialData, onClose }) {
   const dialog = useRef(null);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(initialData || null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const [follow, setFollow] = useState(!citation);
@@ -44,14 +44,15 @@ export function SourceViewer({ reportId, citation, expectedHash, playback, onClo
   useEffect(() => {
     let cancelled = false;
     setError(""); setData(null);
-    apiRequest(`/reports/${reportId}/transcript`).then((source) => {
+    const sourceRequest = initialData ? Promise.resolve(initialData) : apiRequest(`/reports/${reportId}/transcript`);
+    sourceRequest.then((source) => {
       if (cancelled) return;
       if (expectedHash && source.source_hash !== expectedHash) {
         setError("This transcript no longer matches the report's source. Run a new analysis before using these citations.");
       } else setData(source);
     }).catch((err) => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [reportId, expectedHash, retry]);
+  }, [reportId, expectedHash, initialData, retry]);
   useEffect(() => {
     if (data && citation) dialog.current.querySelector(`[data-passage="${citation.passage_id}"]`)?.scrollIntoView({ block: "center" });
   }, [data, citation]);

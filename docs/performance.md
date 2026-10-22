@@ -1,5 +1,24 @@
 # Report latency and transcript coverage
 
+## Progressive delivery
+
+New calls use `POST /analyze/stream`. The call date and original transcript arrive first; the user can read that transcript while generation continues. Each complete finding passes the existing structure, quotation and numeric checks before it is sent. Prices arrive independently. The final event contains the persisted report, including its full research context. `/analyze` remains compatible with JSON clients. Interrupted streams do not cancel the background save. One admitted stream job and the existing generation limit prevent queued requests from multiplying memory use.
+
+The Gemini model, full transcript input, thinking budget and final source checks are unchanged. Streaming reduces the wait before usable content appears; it does not establish faster model completion. Streaming model requests do not restart after partial output. The final report replaces the provisional findings; a failed generation clears those provisional findings and keeps the original transcript accessible.
+
+The transcript reader now retains one locked DuckDB database instead of creating one for every coverage/current/prior-call query. DuckDB 1.4.3's HTTP, external-file and Parquet metadata caches can therefore survive between reads. The connection expires hourly because the source URL is mutable, and closes on DuckDB errors. Its memory/thread limits remain 128MB/one thread. Cold processes still need remote reads. No speedup figure is claimed from this change yet.
+
+Production logs now distinguish transcript readiness, the model's first source-checked finding, model completion with output/thought token counts, and final report completion. First-finding duration is measured from model start; add transcript readiness to assess the server-side wait before that finding. These ordinary request observations, not mocked tests, should determine subsequent changes. Reducing reasoning, changing model or cutting transcript content would need a separate quality decision.
+
+Methodology sources:
+
+- [Google: streaming structured output and partial JSON](https://ai.google.dev/gemini-api/docs/generate-content/structured-output#streaming).
+- [OpenAI: latency optimization, processed streaming, output tokens and parallel work](https://developers.openai.com/api/docs/guides/latency-optimization).
+- [Anthropic: measuring latency and progressive responses](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-latency).
+- DuckDB 1.4.3: [supported HTTP/external cache settings](https://github.com/duckdb/duckdb/blob/v1.4.3/src/include/duckdb/main/settings.hpp), [database-owned external-file cache](https://github.com/duckdb/duckdb/blob/v1.4.3/src/storage/external_file_cache.cpp), and [Parquet metadata cache](https://github.com/duckdb/duckdb/blob/v1.4.3/extension/parquet/parquet_extension.cpp).
+
+The user's MSFT Q2 FY2022 request on October 21, 2026 logged `transcript_seconds=4.800`, model duration `11.451` seconds, and `total_seconds=16.317` before this release. It is an observed baseline for that request, not a promise for other calls. This release was not benchmarked by generating additional reports.
+
 The first request for a fiscal call fetches its transcript, generates and checks one Gemini brief, retrieves prices, and prepares prior-call comparisons and dated news. Prices and research-source retrieval now overlap AI generation. Comparisons are assembled after the checked findings are available, then persisted with the report. The SQLAlchemy session is never shared with worker threads.
 
 Gemini 2.5 Flash uses a 1,024-token thinking budget instead of its dynamic default. This limits internal reasoning, not the answer length or the transcript input. Other configured models retain their own defaults. Citation and numeric checks still run. This is a latency/quality tradeoff, not proof that semantic accuracy is unchanged. See [Google's thinking-budget documentation](https://ai.google.dev/gemini-api/docs/generate-content/thinking#thinking-budgets).

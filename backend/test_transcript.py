@@ -7,6 +7,10 @@ import transcript
 
 
 class TranscriptCoverageChecks(unittest.TestCase):
+    def setUp(self):
+        transcript._close_connection()
+        self.addCleanup(transcript._close_connection)
+
     def test_search_suggestions_have_transcripts_and_rank_exact_ticker_first(self):
         results = transcript.search_companies("MSFT")
         self.assertEqual(results[0]["symbol"], "MSFT")
@@ -20,8 +24,8 @@ class TranscriptCoverageChecks(unittest.TestCase):
         transcript._fetch_transcript.cache_clear()
         self.addCleanup(transcript._fetch_transcript.cache_clear)
         with patch.object(transcript, "_query_lock"), patch.object(transcript.duckdb,"connect") as connect:
-            connection=connect.return_value.__enter__.return_value
-            connection.execute.return_value.fetchone.return_value=("2020-04-29", [{"content":"Original Microsoft call."}])
+            connection=connect.return_value
+            connection.execute.return_value.fetchall.return_value=[("2020-04-29", [{"content":"Original Microsoft call."}])]
             first=transcript.fetch_transcript("msft",2020,3)
             first["content"]="changed copy"
             self.assertEqual(transcript.fetch_transcript("MSFT",2020,3)["content"],"Original Microsoft call.")
@@ -29,7 +33,7 @@ class TranscriptCoverageChecks(unittest.TestCase):
             connection.execute.side_effect=transcript.duckdb.Error("test outage")
             for _ in range(2):
                 with self.assertRaises(RuntimeError): transcript.fetch_transcript("VET",2020,3)
-            self.assertEqual(connect.call_count,3)
+            self.assertEqual(connect.call_count,2)
 
     def test_provider_string_dates_and_missing_tickers_use_the_same_metadata_query(self):
         with tempfile.TemporaryDirectory() as folder, transcript.duckdb.connect(":memory:") as connection:
@@ -46,7 +50,7 @@ class TranscriptCoverageChecks(unittest.TestCase):
         transcript._available_calls.cache_clear()
         self.addCleanup(transcript._available_calls.cache_clear)
         with patch.object(transcript,"time",return_value=7200) as clock, patch.object(transcript.duckdb,"connect") as connect:
-            connection=connect.return_value.__enter__.return_value
+            connection=connect.return_value
             connection.execute.return_value.fetchall.return_value=[(2023,3,date(2023,11,1))]
             first=transcript.available_calls("vet")
             first[0]["year"]=1900
