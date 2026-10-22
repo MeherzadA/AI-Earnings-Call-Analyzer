@@ -15,10 +15,46 @@ TRANSCRIPTS_URL = (
 )
 # ponytail: one Parquet reader fits the free instance; raise concurrency with more RAM.
 _query_lock = Lock()
+_connection = None
+_connection_hour = None
 COVERAGE_SQL = """SELECT fiscal_year, fiscal_quarter, report_date FROM read_parquet(?)
     WHERE symbol = ? AND fiscal_year IS NOT NULL AND fiscal_quarter BETWEEN 1 AND 4
       AND (report_date IS NULL OR TRY_CAST(report_date AS DATE) <= CURRENT_DATE)
     ORDER BY fiscal_year DESC, fiscal_quarter DESC"""
+
+
+def _close_connection():
+    global _connection, _connection_hour
+    connection, _connection = _connection, None
+    _connection_hour = None
+    if connection is not None:
+        try:
+            connection.close()
+        except duckdb.Error:
+            pass
+
+
+def _read_rows(sql, parameters, hour, timeout, retries):
+    global _connection, _connection_hour
+    with _query_lock:
+        try:
+            if _connection is None or _connection_hour != hour:
+                _close_connection()
+                config = {"memory_limit": "128MB", "threads": "1"}
+                if os.getenv("DUCKDB_EXTENSION_DIRECTORY"):
+                    config["extension_directory"] = os.environ["DUCKDB_EXTENSION_DIRECTORY"]
+                _connection = duckdb.connect(":memory:", config=config)
+                # Keep native range/metadata caches across calls; expire the mutable source hourly.
+                _connection.execute("SET enable_external_file_cache=true")
+                _connection.execute("SET enable_http_metadata_cache=true")
+                _connection.execute("SET parquet_metadata_cache=true")
+                _connection_hour = hour
+            _connection.execute(f"SET http_timeout={timeout}")
+            _connection.execute(f"SET http_retries={retries}")
+            return _connection.execute(sql, parameters).fetchall()
+        except duckdb.Error:
+            _close_connection()
+            raise
 
 
 @lru_cache(maxsize=1)
@@ -42,17 +78,8 @@ def available_calls(ticker: str) -> list[dict]:
 
 @lru_cache(maxsize=128)
 def _available_calls(ticker, hour):
-    config = {"memory_limit": "128MB", "threads": "1"}
-    if os.getenv("DUCKDB_EXTENSION_DIRECTORY"):
-        config["extension_directory"] = os.environ["DUCKDB_EXTENSION_DIRECTORY"]
     try:
-        with _query_lock, duckdb.connect(":memory:", config=config) as connection:
-            connection.execute("SET http_timeout=10")
-            connection.execute("SET http_retries=0")
-            rows = connection.execute(
-                COVERAGE_SQL,
-                [TRANSCRIPTS_URL, ticker],
-            ).fetchall()
+        rows = _read_rows(COVERAGE_SQL, [TRANSCRIPTS_URL, ticker], hour, timeout=10, retries=0)
     except duckdb.Error as exc:
         raise RuntimeError("Transcript coverage could not be checked right now.") from exc
     return tuple((int(year), int(quarter), str(call_date) if call_date else None) for year, quarter, call_date in rows)
@@ -66,26 +93,21 @@ def fetch_transcript(ticker: str, year: int, quarter: int) -> dict | None:
 
 @lru_cache(maxsize=16)
 def _fetch_transcript(ticker, year, quarter, hour):
-    config = {"memory_limit": "128MB", "threads": "1"}
-    if os.getenv("DUCKDB_EXTENSION_DIRECTORY"):
-        config["extension_directory"] = os.environ["DUCKDB_EXTENSION_DIRECTORY"]
     try:
-        with _query_lock, duckdb.connect(":memory:", config=config) as connection:
-            connection.execute("SET http_timeout=20")
-            connection.execute("SET http_retries=1")
-            row = connection.execute(
-                """
-                SELECT report_date, transcripts
-                FROM read_parquet(?)
-                WHERE symbol = ? AND fiscal_year = ? AND fiscal_quarter = ?
-                LIMIT 1
-                """,
-                [TRANSCRIPTS_URL, ticker.upper(), year, quarter],
-            ).fetchone()
+        rows = _read_rows(
+            """
+            SELECT report_date, transcripts
+            FROM read_parquet(?)
+            WHERE symbol = ? AND fiscal_year = ? AND fiscal_quarter = ?
+            LIMIT 1
+            """,
+            [TRANSCRIPTS_URL, ticker.upper(), year, quarter], hour, timeout=20, retries=1,
+        )
     except duckdb.Error as exc:
         raise RuntimeError("The transcript provider is unavailable. Please try again shortly.") from exc
-    if not row:
+    if not rows:
         return None
+    row = rows[0]
     content = " ".join(
         paragraph["content"].strip()
         for paragraph in (row[1] or [])

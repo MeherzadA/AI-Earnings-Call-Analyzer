@@ -571,3 +571,14 @@
  .research-desk .header-nav { gap:10px; }
  .research-desk .header-nav a,.research-desk .header-nav button { font-size:12px; }
 }
+/* Useful call content stays interactive while the remaining analysis arrives. */
+.analysis-live-status { display:flex; align-items:center; gap:12px; padding:14px 16px; margin:18px 0 24px; border-left:3px solid #e49a24; background:#fff7e7; }
+.analysis-live-status p { margin:0; flex:1; color:#4a4436; font-size:14px; line-height:1.5; }
+.analysis-live-status .spinner { border-color:#ead8b3; border-top-color:#94601c; flex:none; }
+.analysis-live-status .text-btn { flex:none; }
+.stream-findings-heading { margin:0 0 8px; font-size:21px; }
+.pending-report .finding-card { animation: finding-arrive .22s ease-out; }
+.pending-prices { max-width:660px; margin-top:24px; }
+@keyframes finding-arrive { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+@media (max-width:600px) { .pending-report .report-heading { flex-wrap:wrap; gap:14px; } .analysis-live-status { flex-wrap:wrap; } .analysis-live-status p { min-width:180px; } }
+@media (prefers-reduced-motion:reduce) { .pending-report .finding-card { animation:none; } }
