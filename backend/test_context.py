@@ -8,6 +8,13 @@ from comparisons import additional_comparisons
 
 
 class ContextChecks(unittest.TestCase):
+    def test_prefetched_missing_call_does_not_repeat_provider_requests(self):
+        sources={"previous":None,"previous_error":None,"news":{"status":"empty","items":[]}}
+        with patch("context.fetch_transcript",side_effect=AssertionError("Already looked up")), patch("context.dated_news",side_effect=AssertionError("Already looked up")):
+            result=context.build_context("VET",2023,3,{},"2023-11-02",sources=sources)
+        self.assertEqual(result["previous_call"]["status"],"unavailable")
+        self.assertEqual(result["news"]["status"],"empty")
+
     def test_additional_comparisons_require_matching_metric_period_and_quotes(self):
         earlier = "For Q1 FY2024, we expect iPhone revenue to grow year-over-year. For Q1 FY2024, we expect company gross margin to be between 45% and 46%."
         actual = "iPhone revenue was $69.7 billion, up 6% year-over-year. Company gross margin was 45.9%, up 70 basis points sequentially."

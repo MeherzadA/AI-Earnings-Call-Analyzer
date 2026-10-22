@@ -1,4 +1,6 @@
 import os
+import logging
+from time import perf_counter
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -59,14 +61,17 @@ Return only the JSON matching the provided schema, without a separate summary.
     if not api_key:
         raise RuntimeError("AI analysis is not configured on this server.")
     model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    started = perf_counter()
     try:
         with genai.Client(api_key=api_key, http_options=types.HttpOptions(
             timeout=60000, retry_options=types.HttpRetryOptions(attempts=1),
         )) as client:
             response = client.models.generate_content(
                 model=model, contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ResearchDraft.model_json_schema()),
+                config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ResearchDraft.model_json_schema(),
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024) if model == "gemini-2.5-flash" else None),
             )
+        logging.getLogger("uvicorn.error").info("AI report model=%s seconds=%.3f", model, perf_counter() - started)
         draft, omitted = parse_draft(response.text or "")
         research = check_research(draft, transcript_text, year, model, omitted)
         return {**legacy_analysis(research), "research": research}

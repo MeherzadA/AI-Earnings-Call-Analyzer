@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+from threading import Event
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 TEMP = tempfile.TemporaryDirectory(prefix="earnings-api-tests-")
@@ -37,6 +38,8 @@ class AnalysisFlowTests(unittest.TestCase):
         Base.metadata.drop_all(bind=engine)
         Base.metadata.create_all(bind=engine)
         self.context = patch.object(main, "build_context", return_value=CONTEXT).start()
+        patch.object(main, "fetch_context_sources", return_value={}).start()
+        patch.object(main, "get_stock_returns", return_value={}).start()
         self.addCleanup(patch.stopall)
         self.client = TestClient(main.app)
 
@@ -120,13 +123,73 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(first.status_code, 200, first.text)
             self.assertIsNone(first.json()["context"])
             second = self.client.post("/analyze", json=request).json()
-            self.assertEqual(second["context"], failed)
+            self.assertIsNone(second["context"])  # Cache reads must never wait for providers.
+            partial = self.client.post(f"/reports/{second['report_id']}/context").json()
+            self.assertEqual(partial["context"], failed)
             retried = self.client.post(f"/reports/{second['report_id']}/context").json()
             self.assertEqual(retried["context"], CONTEXT)
             self.assertFalse(retried["cached"])
             self.assertTrue(self.client.post(f"/reports/{second['report_id']}/context").json()["cached"])
             ai.assert_called_once()
             self.assertEqual(self.context.call_count, 3)
+
+    def test_new_report_overlaps_provider_work_with_ai_and_keeps_full_context(self):
+        prices_started, sources_started, ai_started = Event(), Event(), Event()
+        def prices(*args, **kwargs):
+            prices_started.set()
+            self.assertTrue(ai_started.wait(2), "Prices must overlap AI analysis")
+            return {"daily_prices":[]}
+        def sources(*args, **kwargs):
+            sources_started.set()
+            self.assertTrue(ai_started.wait(2), "Research retrieval must overlap AI analysis")
+            return {"previous":None, "previous_error":None, "news":{"status":"empty"}}
+        def ai(**kwargs):
+            self.assertTrue(prices_started.wait(2))
+            self.assertTrue(sources_started.wait(2))
+            ai_started.set()
+            return REPORT
+        with patch.object(main, "fetch_transcript", return_value={"content":SOURCE,"report_date":"2024-02-01"}), patch.object(main, "get_stock_returns", side_effect=prices), patch.object(main, "fetch_context_sources", side_effect=sources), patch.object(main, "analyze_transcript", side_effect=ai) as generate:
+            response = self.client.post("/analyze", json={"ticker":"AAPL","year":2024,"quarter":1})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["context"], CONTEXT)
+        generate.assert_called_once()
+
+    def test_cached_submission_never_waits_for_incomplete_external_context(self):
+        self.context.return_value = {**CONTEXT,"news":{"status":"unavailable"}}
+        with patch.object(main,"fetch_transcript",return_value={"content":SOURCE,"report_date":"2024-02-01"}), patch.object(main,"analyze_transcript",return_value=REPORT), patch.object(main,"get_stock_returns",return_value={}):
+            report = self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1}).json()
+        with patch.object(main,"fetch_transcript",side_effect=AssertionError("No transcript fetch on a cache hit")), patch.object(main,"build_context",side_effect=AssertionError("No context fetch on a cache hit")), patch.object(main,"analyze_transcript",side_effect=AssertionError("No AI on a cache hit")):
+            response = self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1})
+        self.assertEqual(response.status_code,200)
+        self.assertEqual(response.json()["report_id"],report["report_id"])
+
+    def test_optional_context_failure_does_not_discard_the_completed_ai_report(self):
+        self.context.side_effect=RuntimeError("Temporary source failure")
+        with patch.object(main,"fetch_transcript",return_value={"content":SOURCE,"report_date":"2024-02-01"}), patch.object(main,"analyze_transcript",return_value=REPORT) as ai:
+            first=self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1})
+            self.assertEqual(first.status_code,200,first.text)
+            self.assertIsNone(first.json()["context"])
+            cached=self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1})
+            self.assertEqual(cached.json()["report_id"],first.json()["report_id"])
+            ai.assert_called_once()
+
+    def test_coverage_distinguishes_missing_calls_from_provider_failure(self):
+        with patch.object(main,"available_calls",return_value=[]) as coverage, patch.object(main,"analyze_transcript") as ai:
+            self.assertEqual(self.client.get("/transcripts/VS/periods").json(),{"ticker":"VS","periods":[]})
+            coverage.return_value=[{"year":2023,"quarter":3,"call_date":"2023-11-01"}]
+            self.assertEqual(self.client.get("/transcripts/VET/periods").json()["periods"][0]["year"],2023)
+            coverage.side_effect=RuntimeError("Coverage lookup unavailable")
+            self.assertEqual(self.client.get("/transcripts/VET/periods").status_code,502)
+            self.assertEqual(self.client.get("/transcripts/INVALID!/periods").status_code,422)
+            ai.assert_not_called()
+
+    def test_model_uses_a_bounded_thinking_budget_and_still_checks_sources(self):
+        with patch.dict(os.environ,{"GEMINI_MODEL":"gemini-2.5-flash"}), patch.object(analysis.genai,"Client") as client:
+            generate=client.return_value.__enter__.return_value.models.generate_content
+            generate.return_value.text=json.dumps(DRAFT)
+            checked=analysis.analyze_transcript("AAPL",2024,1,SOURCE)
+            self.assertEqual(generate.call_args.kwargs["config"].thinking_config.thinking_budget,1024)
+            self.assertEqual(checked["research"]["checks"]["findings_retained"],1)
 
     def test_legacy_reports_are_retired_without_deleting_or_generating(self):
         with database.SessionLocal() as db:

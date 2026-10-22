@@ -197,7 +197,25 @@ def dated_news(ticker, call_date):
             "limitation": "Headline metadata from Google News RSS, not read or verified article content. UTC publication dates only; same-day articles may be after the call. Historical feed coverage is incomplete."}
 
 
-def build_context(ticker, year, quarter, research, call_date, previous=None, current_text=""):
+def fetch_context_sources(ticker, year, quarter, call_date, previous=None, cached=None):
+    """Fetch independent sources while the report's AI analysis is running."""
+    previous_year, previous_quarter = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
+    previous_error = None
+    try:
+        previous = previous or fetch_transcript(ticker, previous_year, previous_quarter)
+    except RuntimeError:
+        previous_error = "The preceding transcript could not be retrieved."
+    cached = cached or {}
+    news = cached.get("news", {})
+    if cached.get("call_date") != call_date or news.get("status") not in ("available", "empty"):
+        try:
+            news = dated_news(ticker, call_date)
+        except (requests.RequestException, RuntimeError, ValueError, KeyError, ET.ParseError) as error:
+            news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": []}
+    return {"previous": previous, "previous_error": previous_error, "news": news}
+
+
+def build_context(ticker, year, quarter, research, call_date, previous=None, current_text="", sources=None):
     if not call_date:
         current = fetch_transcript(ticker, year, quarter)
         call_date = current.get("report_date") if current else None
@@ -206,28 +224,24 @@ def build_context(ticker, year, quarter, research, call_date, previous=None, cur
     call_date = date.fromisoformat(call_date[:10]).isoformat()
     previous_year, previous_quarter = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
     actual = revenue_highlight(research)
+    if actual is None:
+        literal = transcript_revenue(current_text, quarter)
+        actual = revenue_highlight({"financial_highlights": [literal]}) if literal else None
     prior = {"year": previous_year, "quarter": previous_quarter, "outlooks": []}
-    try:
-        previous = previous or fetch_transcript(ticker, previous_year, previous_quarter)
-        if previous and previous.get("report_date") and previous["report_date"][:10] >= call_date:
-            previous = None
-        if previous:
-            prior.update(status="available", source_hash=source_hash(previous["content"]), report_date=previous.get("report_date"),
-                         outlooks=prior_outlook(previous["content"], quarter, actual.get("period_terms", []) if actual else [], year))
-        else:
-            prior.update(status="unavailable", message="The preceding fiscal call was not available.")
-    except RuntimeError:
-        prior.update(status="unavailable", message="The preceding transcript could not be retrieved.")
+    sources = sources if sources is not None else fetch_context_sources(ticker, year, quarter, call_date, previous, research.get("context"))
+    previous = sources["previous"]
+    if previous and previous.get("report_date") and previous["report_date"][:10] >= call_date:
+        previous = None
+    if previous:
+        prior.update(status="available", source_hash=source_hash(previous["content"]), report_date=previous.get("report_date"),
+                     outlooks=prior_outlook(previous["content"], quarter, actual.get("period_terms", []) if actual else [], year))
+    else:
+        prior.update(status="unavailable", message=sources["previous_error"] or "The preceding fiscal call was not available.")
     comparison = compare_outlook(prior["outlooks"], actual)
     if actual:
         comparison["reported"] = {key: value for key, value in actual.items() if key not in ("amount", "period_terms")}
     cached = research.get("context", {})
-    news = cached.get("news", {})
-    if cached.get("call_date") != call_date or news.get("status") not in ("available", "empty"):
-        try:
-            news = dated_news(ticker, call_date)
-        except (requests.RequestException, RuntimeError, ValueError, KeyError, ET.ParseError) as error:
-            news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": []}
+    news = sources["news"]
     return {"version": CONTEXT_VERSION, "call_date": call_date, "loaded_at": datetime.now(timezone.utc).isoformat(),
             "external_sources_loaded_at": cached.get("external_sources_loaded_at", cached.get("loaded_at")) if cached.get("call_date") == call_date else datetime.now(timezone.utc).isoformat(), "previous_call": prior,
             "comparison": comparison, "additional_comparisons": additional_comparisons(previous["content"], current_text, prior["outlooks"], quarter, year, actual.get("period_terms", []) if actual else []) if previous and prior["status"] == "available" else [], "news": news,

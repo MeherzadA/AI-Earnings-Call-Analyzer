@@ -95,6 +95,11 @@
 .research-desk .main { max-width:1560px; padding:22px 24px 36px; gap:24px; }
 .desk-controls { display:flex; align-items:center; gap:22px; }
 .desk-controls[hidden] { display:none; }
+.suggestion-source { padding:9px 12px; font-size:12px; color:#637386; background:#f3f6f9; }
+.call-coverage { margin-top:11px; color:#486373; font:13px/1.6 var(--font); }
+.coverage-missing { color:#8b541e; }
+.coverage-periods { display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; }
+.coverage-periods button { padding:7px 9px; min-height:36px; border:1px solid #ced7df; border-radius:2px; background:white; color:#235784; font:12px var(--font-mono); }
 .report-loading { width:min(100%,540px); margin:12px auto; padding:28px; align-items:stretch; gap:22px; text-align:left; }
 .loading-call { display:flex; align-items:center; gap:13px; }
 .loading-call .company-mark { width:42px; height:42px; flex:none; }

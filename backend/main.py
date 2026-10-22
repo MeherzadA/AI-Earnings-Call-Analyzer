@@ -20,13 +20,15 @@ source venv/bin/activate
 import json
 import logging
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 from typing import Literal
 from datetime import datetime, timezone
+from time import perf_counter
 from sqlalchemy import func, text, tuple_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,13 +36,13 @@ from database import engine, get_db
 
 import models
 
-from transcript import fetch_transcript
+from transcript import fetch_transcript, available_calls
 
 from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
-from context import build_context, CONTEXT_VERSION, context_complete, transcript_revenue
+from context import build_context, fetch_context_sources, CONTEXT_VERSION, context_complete
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -89,6 +91,14 @@ def health():
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
     return {"status": "ok", "database": "connected"}
+
+
+@app.get("/transcripts/{ticker}/periods")
+def transcript_periods(ticker: str = Path(min_length=1, max_length=10, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")):
+    try:
+        return {"ticker": ticker.upper(), "periods": available_calls(ticker)}
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
 
 
 def saved_report(db, ticker, year, quarter):
@@ -194,12 +204,8 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
         previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
         prices = json.loads(analysis.daily_prices or "[]")
         call_date = research.get("call_date") or (prices[0]["date"] if prices else None)
-        context_source = {**research}
-        if not context_source.get("financial_highlights"):
-            revenue = transcript_revenue(transcript.raw_text, int(transcript.quarter))
-            context_source["financial_highlights"] = [revenue] if revenue else []
         try:
-            context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), context_source, call_date,
+            context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), research, call_date,
                                     {"content": previous.raw_text} if previous else None, current_text=transcript.raw_text)
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
@@ -253,11 +259,12 @@ generation_lock = Lock()
 
 @app.post("/analyze")
 def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
+    started = perf_counter()
     existing = saved_report(db, request.ticker, request.year, request.quarter)
     if existing and stored_research(existing[1]):
         stored = stored_research(existing[1])
         if stored["source_hash"] == source_hash(existing[0].raw_text):
-            return report_with_context(*existing, db)
+            return report_response(*existing)
     # A single generation at a time protects the shared free-tier quota and instance memory.
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report is being prepared. Please try again shortly.")
@@ -271,21 +278,34 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
             except RuntimeError as error:
                 raise HTTPException(status_code=502, detail=str(error)) from error
             if not transcript:
-                raise HTTPException(status_code=404, detail=f"No transcript found for {request.ticker} Q{request.quarter} {request.year}")
+                raise HTTPException(status_code=404, detail=f"Our transcript source has no {request.ticker} fiscal Q{request.quarter} {request.year} call. A company appearing in stock search does not guarantee transcript coverage.")
         ensure_past_call(transcript.get("report_date"))
-        try:
-            result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
-                                        transcript_text=transcript["content"])
-        except RuntimeError as error:
-            raise HTTPException(status_code=503, detail=str(error)) from error
-        if transcript.get("report_date"):
-            result["research"]["call_date"] = transcript["report_date"]
+        logging.getLogger("uvicorn.error").info("Report %s Q%s FY%s transcript_seconds=%.3f", request.ticker, request.quarter, request.year, perf_counter() - started)
+        previous_year, previous_quarter = (request.year, request.quarter - 1) if request.quarter > 1 else (request.year - 1, 4)
+        previous = db.query(models.Transcript).filter_by(ticker=request.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
+        # Only provider calls run in workers; the SQLAlchemy session stays on this thread.
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            prices = workers.submit(get_stock_returns, request.ticker, request.year, request.quarter, earnings_date=transcript.get("report_date")) if not existing else None
+            call_date = transcript.get("report_date")
+            sources = workers.submit(fetch_context_sources, request.ticker, request.year, request.quarter, call_date, {"content": previous.raw_text} if previous else None) if call_date else None
+            try:
+                result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
+                                            transcript_text=transcript["content"])
+                result = {**result, "research": {**result["research"]}}
+            except RuntimeError as error:
+                raise HTTPException(status_code=503, detail=str(error)) from error
+            if call_date:
+                result["research"]["call_date"] = call_date
+                try:
+                    result["research"]["context"] = build_context(request.ticker, request.year, request.quarter,
+                        result["research"], call_date, current_text=transcript["content"], sources=sources.result())
+                except RuntimeError:
+                    logging.warning("Research sources incomplete for %s; preserving the completed analysis", request.ticker)
+            returns = prices.result() if prices else None
         if existing:
             # Upgrade only the new column; retain the original report and price fields.
             db_analysis.research_json = json.dumps(result["research"])
         else:
-            returns = get_stock_returns(request.ticker, request.year, request.quarter,
-                                        earnings_date=transcript.get("report_date"))
             db_transcript = models.Transcript(ticker=request.ticker, year=request.year,
                                              quarter=str(request.quarter), raw_text=transcript["content"])
             db.add(db_transcript)
@@ -302,6 +322,9 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
         db.commit()
     finally:
         generation_lock.release()
+    logging.getLogger("uvicorn.error").info("Report %s Q%s FY%s total_seconds=%.3f", request.ticker, request.quarter, request.year, perf_counter() - started)
+    if call_date:
+        return report_response(db_transcript, db_analysis, cached=False)
     return report_with_context(db_transcript, db_analysis, db, cached=False)
 
 
