@@ -1,24 +1,31 @@
-# Virtual environment
+# Local environments and credentials
 venv/
-
-# Environment variables
-backend/.env
-frontend/.env
+.venv/
+.env
+.env.*
+!.env.example
 
 # Python cache
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+.pytest_cache/
 
-# Node modules
-frontend/node_modules/
+# Dependencies and builds
+node_modules/
+frontend/dist/
 
-# OS files
-.DS_Store
-Thumbs.db
-
+# Local runtime data
+.runtime/
 .duckdb_extensions/
 backend/.cache/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 
-.runtime/
-frontend/dist/
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
