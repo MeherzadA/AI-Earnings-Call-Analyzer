@@ -9,6 +9,7 @@
   --display: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
+html { scrollbar-gutter: stable; }
 body { margin: 0; color: var(--ink); background: var(--bg); font-family: var(--font); -webkit-font-smoothing: antialiased; }
 p, h1, h2, h3 { margin: 0; }
 button, input, select { font: inherit; }
@@ -223,7 +224,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brief-takeaway button { display: inline-block; min-height: 44px; padding: 10px 0 0; background: none; border: 0; color: var(--accent); font-size: 12px; text-decoration: underline; text-underline-offset: 4px; }
 .brief-more { display: block; width: 100%; text-align: left; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--accent); min-height: 48px; padding: 16px 0 0; font-size: 13px; font-weight: 500; }
 .all-financials { padding: 0 20px; background: white; border: 1px solid var(--border); }
-.all-financials > summary { padding: 15px 0; min-height: 44px; font-size: 13px; cursor: pointer; }
+.all-financials > h3 { padding: 15px 0; font-size: 13px; }
 .all-financials-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; padding: 10px 0 20px; }
 .all-financials-grid article { min-width: 0; }
 .all-financials-grid article > p { color: var(--ink-2); font-size: 12px; margin-bottom: 10px; }

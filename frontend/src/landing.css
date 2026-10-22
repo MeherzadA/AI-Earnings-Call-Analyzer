@@ -37,10 +37,7 @@
 .earnings-strip { display:flex; min-width:0; background:#fff; border:1px solid #bcc7d0; }
 .earnings-strip-label { display:flex; flex-direction:column; justify-content:center; flex:none; width:142px; padding:14px 17px; background:#dff2f3; border-right:1px solid #afd4d8; }
 .earnings-strip-label strong { font:600 14px var(--font); color:#245664; }
-.earnings-strip-label > span { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:6px; color:#4c7480; font:11px var(--font-mono); }
-.strip-motion-toggle { display:grid; place-items:center; flex:none; width:24px; height:24px; padding:0; border:1px solid #afd4d8; background:transparent; color:#245664; font:12px var(--font-mono); }
-.strip-motion-toggle:hover { color:#b34721; }
-@media(prefers-reduced-motion:reduce) { .strip-motion-toggle { display:none; } }
+.earnings-strip-label > span { margin-top:6px; color:#4c7480; font:11px var(--font-mono); }
 .earnings-strip-calls { display:flex; flex:1; min-width:0; overflow-x:auto; scrollbar-width:thin; }
 .earnings-strip-calls > button { position:relative; flex:1 0 178px; padding:13px 17px 14px; text-align:left; border:0; border-right:1px solid #dde3e8; background:#fff; color:#293e50; }
 .earnings-strip-calls > button:last-child { border-right:0; }

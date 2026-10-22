@@ -4,6 +4,7 @@ import { apiRequest, streamAnalysis } from "./api.js";
 import ResearchReport, { SourceViewer, FindingCard } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 import { callDateLabel } from "./reportPresentation.js";
+import { animateStockStrip } from "./stockStrip.js";
 
 const COMPANIES = { AAPL: "Apple", NVDA: "NVIDIA", PYPL: "PayPal", MSFT: "Microsoft" };
 
@@ -205,29 +206,11 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const [featured, setFeatured] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState("");
-  const [stripPaused, setStripPaused] = useState(false);
   const strip = useRef(null);
   const chart = useRef(null);
   useEffect(() => {
-    if (stripPaused || history.length < 2) return;
-    const calls = strip.current;
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    let frame, previous = null, position = calls.scrollLeft, direction = 1;
-    function scrollCalls(time) {
-      const end = Math.max(0, calls.scrollWidth - calls.clientWidth);
-      if (reducedMotion.matches || calls.matches(":hover, :focus-within")) {
-        position = calls.scrollLeft;
-      } else if (previous !== null && end > 0) {
-        position = Math.max(0, Math.min(end, position + direction * Math.min(time - previous, 64) * 0.025));
-        calls.scrollLeft = position;
-        if (position === 0 || position === end) direction *= -1;
-      }
-      previous = time;
-      frame = requestAnimationFrame(scrollCalls);
-    }
-    frame = requestAnimationFrame(scrollCalls);
-    return () => cancelAnimationFrame(frame);
-  }, [history, stripPaused]);
+    if (history.length >= 2) return animateStockStrip(strip.current);
+  }, [history]);
   function previewCall(item) {
     setFeatured(item);
     if (window.matchMedia("(max-width:950px)").matches) chart.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -247,8 +230,8 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const excerpt = displayedPreview?.research?.findings?.find((finding) => finding.citations?.[0]?.quote)?.citations[0].quote;
   return <div className="landing-workstation">
     <section className="earnings-strip" aria-label="Choose a call to preview its price history">
-      <div className="earnings-strip-label"><strong>1-day returns</strong><span>Select a call{history.length > 1 && <button type="button" className="strip-motion-toggle" aria-pressed={stripPaused} aria-label={stripPaused ? "Resume stock strip animation" : "Pause stock strip animation"} title={stripPaused ? "Resume scrolling" : "Pause scrolling"} onClick={() => setStripPaused(!stripPaused)}><span aria-hidden="true">{stripPaused ? "▶" : "Ⅱ"}</span></button>}</span></div>
-      <div className="earnings-strip-calls" ref={strip} role="group" aria-label="Preview a call" onWheel={() => setStripPaused(true)} onPointerDown={() => setStripPaused(true)}>
+      <div className="earnings-strip-label"><strong>1-day returns</strong><span>Select a call</span></div>
+      <div className="earnings-strip-calls" ref={strip} role="group" aria-label="Preview a call">
         {history.map((item) => <button type="button" key={item.report_id} aria-pressed={featured?.report_id === item.report_id} aria-label={`Preview ${item.ticker}, ${callDateLabel(item.call_date)}, Q${item.quarter} FY${item.year}`} onClick={() => previewCall(item)}>
           <span className="strip-symbol">{item.ticker}<b className={returnTone(item.return_1day)}>{returnLabel(item.return_1day)}</b></span>
           <span className="strip-date">{callDateLabel(item.call_date)}<span>Q{item.quarter} FY{item.year}</span></span>
@@ -427,12 +410,14 @@ export default function App() {
               tabs[next].focus(); tabs[next].click();
             }}>{[["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns"], ["market", "Share price"], ["research", "Forecasts & news"]].map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} data-view={id} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}</button>)}</nav>
             <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className="report-workspace">
+              <div className="report-content">
               {reportView === "overview" && result.research?.financial_highlights.length > 0 && <section className="financial-highlights" aria-label="Company-reported financial highlights">{result.research.financial_highlights.slice(0, 3).map((metric) => <button type="button" className="financial-highlight" key={metric.id} onClick={() => setSource(metric.citations[0])} aria-label={`${metric.label}: ${metric.value}. Inspect source`}><span>{metric.label}</span><strong className="financial-value">{metric.value}</strong></button>)}</section>}
               {reportView === "market" ? <MarketPanel result={result} /> : <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onSource={setSource} onPlayback={setPlayback} /></div>}
+              </div>
+              {reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
             </div>
           </div>}
         </section>
-        {result && reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
       </div>
       {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} playback={playback} onClose={() => setSource(undefined)} />}
       {previewSource && <SourceViewer initialData={previewSource.data} citation={previewSource.citation} expectedHash={previewSource.data.source_hash} onClose={() => {setPreviewSource(null); if (result) reportHeading.current?.focus({preventScroll:true});}} />}
