@@ -413,7 +413,7 @@ export default function App() {
         {result && reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
       </div>
       {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} playback={playback} onClose={() => setSource(undefined)} />}
-      {previewSource && <SourceViewer initialData={previewSource.data} citation={previewSource.citation} expectedHash={previewSource.data.source_hash} onClose={() => setPreviewSource(null)} />}
+      {previewSource && <SourceViewer initialData={previewSource.data} citation={previewSource.citation} expectedHash={previewSource.data.source_hash} onClose={() => {setPreviewSource(null); if (result) reportHeading.current?.focus({preventScroll:true});}} />}
     </main>
     <footer className="app-footer"><span>Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">defeatbeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span><a href="https://meherzad.tech" target="_blank" rel="noreferrer">Built by Meherzad Antia ↗</a></footer>
   </div>;
