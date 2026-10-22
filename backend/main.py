@@ -20,7 +20,7 @@ source venv/bin/activate
 import json
 import logging
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from threading import Lock
 from typing import Literal
 from datetime import datetime, timezone
@@ -36,7 +36,7 @@ from database import engine, get_db
 
 import models
 
-from transcript import fetch_transcript, available_calls
+from transcript import fetch_transcript, available_calls, search_companies
 
 from analysis import analyze_transcript
 
@@ -91,6 +91,11 @@ def health():
     except SQLAlchemyError as exc:
         raise HTTPException(status_code=503, detail="Database is unavailable.") from exc
     return {"status": "ok", "database": "connected"}
+
+
+@app.get("/transcripts/search")
+def transcript_search(q: str = Query(min_length=1, max_length=80)):
+    return {"companies": search_companies(q)}
 
 
 @app.get("/transcripts/{ticker}/periods")
@@ -255,6 +260,13 @@ def read_example(ticker: str, db: Session = Depends(get_db)):
 
 # ponytail: one free Render process; use a distributed generation limit if scaled to multiple workers.
 generation_lock = Lock()
+report_workers = ThreadPoolExecutor(max_workers=2)
+
+
+def release_generation_after(futures):
+    """Finish bounded provider work without making a failed HTTP request wait for it."""
+    wait(futures)
+    generation_lock.release()
 
 
 @app.post("/analyze")
@@ -268,6 +280,8 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
     # A single generation at a time protects the shared free-tier quota and instance memory.
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report is being prepared. Please try again shortly.")
+    provider_work = []
+    release_deferred = False
     try:
         if existing:
             db_transcript, db_analysis = existing
@@ -284,24 +298,25 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
         previous_year, previous_quarter = (request.year, request.quarter - 1) if request.quarter > 1 else (request.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=request.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
         # Only provider calls run in workers; the SQLAlchemy session stays on this thread.
-        with ThreadPoolExecutor(max_workers=2) as workers:
-            prices = workers.submit(get_stock_returns, request.ticker, request.year, request.quarter, earnings_date=transcript.get("report_date")) if not existing else None
-            call_date = transcript.get("report_date")
-            sources = workers.submit(fetch_context_sources, request.ticker, request.year, request.quarter, call_date, {"content": previous.raw_text} if previous else None) if call_date else None
+        workers = report_workers
+        prices = workers.submit(get_stock_returns, request.ticker, request.year, request.quarter, earnings_date=transcript.get("report_date")) if not existing else None
+        call_date = transcript.get("report_date")
+        sources = workers.submit(fetch_context_sources, request.ticker, request.year, request.quarter, call_date, {"content": previous.raw_text} if previous else None) if call_date else None
+        provider_work = [future for future in (prices, sources) if future]
+        try:
+            result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
+                                        transcript_text=transcript["content"])
+            result = {**result, "research": {**result["research"]}}
+        except RuntimeError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        if call_date:
+            result["research"]["call_date"] = call_date
             try:
-                result = analyze_transcript(ticker=request.ticker, year=request.year, quarter=request.quarter,
-                                            transcript_text=transcript["content"])
-                result = {**result, "research": {**result["research"]}}
-            except RuntimeError as error:
-                raise HTTPException(status_code=503, detail=str(error)) from error
-            if call_date:
-                result["research"]["call_date"] = call_date
-                try:
-                    result["research"]["context"] = build_context(request.ticker, request.year, request.quarter,
-                        result["research"], call_date, current_text=transcript["content"], sources=sources.result())
-                except RuntimeError:
-                    logging.warning("Research sources incomplete for %s; preserving the completed analysis", request.ticker)
-            returns = prices.result() if prices else None
+                result["research"]["context"] = build_context(request.ticker, request.year, request.quarter,
+                    result["research"], call_date, current_text=transcript["content"], sources=sources.result())
+            except RuntimeError:
+                logging.warning("Research sources incomplete for %s; preserving the completed analysis", request.ticker)
+        returns = prices.result() if prices else None
         if existing:
             # Upgrade only the new column; retain the original report and price fields.
             db_analysis.research_json = json.dumps(result["research"])
@@ -320,8 +335,17 @@ def analyze(request: AnalyzeRequest, db: Session = Depends(get_db)):
             )
             db.add(db_analysis)
         db.commit()
+    except Exception:
+        pending = [future for future in provider_work if not future.done()]
+        if pending:
+            for future in pending:
+                future.cancel()
+            report_workers.submit(release_generation_after, pending)
+            release_deferred = True
+        raise
     finally:
-        generation_lock.release()
+        if not release_deferred:
+            generation_lock.release()
     logging.getLogger("uvicorn.error").info("Report %s Q%s FY%s total_seconds=%.3f", request.ticker, request.quarter, request.year, perf_counter() - started)
     if call_date:
         return report_response(db_transcript, db_analysis, cached=False)

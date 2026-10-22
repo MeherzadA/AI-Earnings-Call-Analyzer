@@ -29,15 +29,19 @@ function SearchBar({ onSubmit, loading, period, reports }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [coverage, setCoverage] = useState(null);
+  const [lookup, setLookup] = useState(null);
   const symbol = ticker.trim().toUpperCase();
   const saved = reports.find((item) => item.ticker === symbol && item.year === Number(year) && Number(item.quarter) === Number(quarter));
   const checked = coverage?.ticker === symbol ? coverage : null;
+  const chooseCompany = lookup?.query === symbol && lookup.companies.length > 0 && !lookup.companies.some((item) => item.symbol === symbol);
   const selectedCall = checked?.periods?.find((item) => item.year === Number(year) && item.quarter === Number(quarter));
   const unavailable = !saved && checked?.periods && !selectedCall;
+  const checking = symbol && !saved && (!checked || checked.loading);
+  const availableYears = [...new Set((checked?.periods || []).map((item) => item.year))];
 
   useEffect(() => {
     setCoverage(null);
-    if (loading || !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return;
+    if (loading || chooseCompany || !/^[A-Z][A-Z0-9.-]{0,9}$/.test(symbol)) return;
     let cancelled = false;
     const timer = setTimeout(() => {
       setCoverage({ticker:symbol, loading:true});
@@ -46,59 +50,36 @@ function SearchBar({ onSubmit, loading, period, reports }) {
       }).catch(() => { if (!cancelled) setCoverage({ticker:symbol, error:true}); });
     }, 650);
     return () => { cancelled = true; clearTimeout(timer); };
-  }, [symbol, loading]);
+  }, [symbol, loading, chooseCompany]);
 
   useEffect(() => {
     if (period) { setTicker(period.ticker); setYear(period.year); setQuarter(period.quarter); }
   }, [period?.ticker, period?.year, period?.quarter]);
 
   useEffect(() => {
-    if (loading || ticker.length < 1 || document.activeElement?.id !== "ticker" || !import.meta.env.VITE_FMP_API_KEY) {
+    if (loading || !ticker.trim() || document.activeElement?.id !== "ticker") {
       setSuggestions([]);
       setShowSuggestions(false);
       return;
     }
 
-    const controller = new AbortController();
+    let cancelled = false;
     setSuggestions([]);
     setShowSuggestions(false);
     const query = encodeURIComponent(ticker.trim());
     const timeout = setTimeout(async () => {
     try {
-        const [symbolRes, nameRes] = await Promise.all([
-        fetch(`https://financialmodelingprep.com/stable/search-symbol?query=${query}&apikey=${import.meta.env.VITE_FMP_API_KEY}`, { signal: controller.signal }),
-        fetch(`https://financialmodelingprep.com/stable/search-name?query=${query}&apikey=${import.meta.env.VITE_FMP_API_KEY}`, { signal: controller.signal })
-        ]);
-
-        const [symbolData, nameData] = await Promise.all([
-        symbolRes.json(),
-        nameRes.json()
-        ]);
-
-        const combined = [...(Array.isArray(symbolData) ? symbolData : []), ...(Array.isArray(nameData) ? nameData : [])];
-
-        // Deduplicate by symbol
-        const seen = new Set();
-        const deduped = combined.filter((item) => {
-        if (seen.has(item.symbol)) return false;
-        seen.add(item.symbol);
-        return true;
-        });
-
-        const filtered = deduped.filter((item) =>
-        (item.exchange === "NASDAQ" || item.exchange === "NYSE") &&
-        /^[A-Z]{1,5}$/.test(item.symbol)
-        );
-
-        if (controller.signal.aborted) return;
-        setSuggestions(filtered.slice(0, 5));
+        const data = await apiRequest(`/transcripts/search?q=${query}`, {timeoutMs:15000});
+        if (cancelled) return;
+        setLookup({query:symbol, companies:data.companies});
+        setSuggestions(data.companies);
         setShowSuggestions(document.activeElement?.id === "ticker");
     } catch {
-        if (!controller.signal.aborted) setSuggestions([]);
+        if (!cancelled) setSuggestions([]);
     }
-    }, 300);
+    }, 200);
 
-    return () => { clearTimeout(timeout); controller.abort(); };
+    return () => { cancelled = true; clearTimeout(timeout); };
   }, [ticker, loading]);
 
   function handleSelect(item) {
@@ -109,7 +90,7 @@ function SearchBar({ onSubmit, loading, period, reports }) {
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!ticker.trim() || unavailable) return;
+    if (!ticker.trim() || unavailable || checking || chooseCompany) return;
     setShowSuggestions(false);
     onSubmit({ ticker: ticker.trim(), year: Number(year), quarter: Number(quarter) });
   }
@@ -120,7 +101,7 @@ function SearchBar({ onSubmit, loading, period, reports }) {
     }}>
       <div className="search-fields">
         <div className="search-field ticker-field" style={{ position: "relative" }}>
-          <label htmlFor="ticker">Company ticker</label>
+          <label htmlFor="ticker">Company or ticker</label>
           <input
             id="ticker"
             type="text"
@@ -129,7 +110,7 @@ function SearchBar({ onSubmit, loading, period, reports }) {
             onChange={(e) => setTicker(e.target.value.toUpperCase())}
             onKeyDown={(e) => { if (e.key === "Escape") setShowSuggestions(false); }}
             onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-            maxLength={10}
+            maxLength={80}
             autoComplete="off"
             spellCheck={false}
             pattern="[A-Za-z][A-Za-z0-9.\-]*"
@@ -138,7 +119,7 @@ function SearchBar({ onSubmit, loading, period, reports }) {
           />
           {showSuggestions && suggestions.length > 0 && (
             <div className="suggestions">
-              <p className="suggestion-source">Company matches · transcript coverage varies</p>
+              <p className="suggestion-source">Companies with transcripts · select a fiscal period</p>
               {suggestions.map((item) => (
                 <button
                   type="button"
@@ -155,7 +136,10 @@ function SearchBar({ onSubmit, loading, period, reports }) {
         </div>
         <div className="search-field">
           <label htmlFor="year">Fiscal year</label>
-          <input
+          {availableYears.length ? <select id="year" value={year} disabled={loading} onChange={(e) => setYear(e.target.value)}>
+            {!availableYears.includes(Number(year)) && <option value={year}>{year} — unavailable</option>}
+            {availableYears.map((value) => <option key={value} value={value}>{value}</option>)}
+          </select> : <input
             id="year"
             type="number"
             min="2000"
@@ -164,31 +148,28 @@ function SearchBar({ onSubmit, loading, period, reports }) {
             disabled={loading}
             onChange={(e) => setYear(e.target.value)}
             required
-          />
+          />}
         </div>
         <div className="search-field">
           <label htmlFor="quarter">Quarter</label>
           <select id="quarter" disabled={loading} value={quarter} onChange={(e) => setQuarter(e.target.value)}>
-            <option value="1">Q1</option>
-            <option value="2">Q2</option>
-            <option value="3">Q3</option>
-            <option value="4">Q4</option>
+            {[1,2,3,4].map((value) => <option key={value} value={value} disabled={checked?.periods?.length && !checked.periods.some((item) => item.year === Number(year) && item.quarter === value)}>Q{value}</option>)}
           </select>
         </div>
       </div>
-      <button className="analyze-btn" disabled={loading || unavailable}>
+      <button className="analyze-btn" disabled={loading || unavailable || checking || chooseCompany}>
         {loading ? (
           <span className="btn-inner">
             <span className="spinner" /> {loading === "saved" ? "Opening report" : "Analyzing"}
           </span>
         ) : (
-          <span className="btn-inner">{unavailable ? "No transcript" : saved ? "Open report" : "Analyze call"}</span>
+          <span className="btn-inner">{chooseCompany ? "Select company" : checking ? "Checking calls…" : unavailable ? "No transcript" : saved ? "Open report" : "Analyze call"}</span>
         )}
       </button>
 
     </form>
     {(symbol && (saved || checked)) && <div className={`call-coverage ${unavailable ? "coverage-missing" : ""}`} role="status" aria-live="polite">
-      {saved ? <p>Existing report · Call held {callDateLabel(saved.call_date)}</p> : selectedCall ? <p>Transcript available · Call held {callDateLabel(selectedCall.call_date)}</p> : checked?.loading ? <p>Checking transcript availability…</p> : checked?.error ? <p>Coverage couldn’t be checked. You can still try this call.</p> : checked?.periods?.length ? <><p>No {symbol} Q{quarter} FY{year} transcript in our current source. Available calls:</p><div className="coverage-periods">{checked.periods.slice(0, 6).map((item) => <button type="button" key={`${item.year}-${item.quarter}`} onClick={() => {setYear(item.year); setQuarter(item.quarter);}}>Q{item.quarter} FY{item.year}</button>)}</div></> : <p>No transcripts for {symbol} in our current source. Company search includes firms without transcript coverage.</p>}
+      {saved ? <p>Existing report · Call held {callDateLabel(saved.call_date)}</p> : selectedCall ? <p>Transcript available · Call held {callDateLabel(selectedCall.call_date)}</p> : checked?.loading ? <p>Checking transcript availability…</p> : checked?.error ? <p>Coverage couldn’t be checked. You can still try this call.</p> : checked?.periods?.length ? <><p>No {symbol} Q{quarter} FY{year} transcript in our current source. Available calls:</p><div className="coverage-periods">{checked.periods.slice(0, 6).map((item) => <button type="button" key={`${item.year}-${item.quarter}`} onClick={() => {setYear(item.year); setQuarter(item.quarter);}}>Q{item.quarter} FY{item.year}</button>)}</div></> : <p>No transcripts for {symbol} in our current source. Try another company.</p>}
     </div>}</>
   );
 }

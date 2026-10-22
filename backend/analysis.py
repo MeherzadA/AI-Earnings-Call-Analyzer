@@ -64,7 +64,10 @@ Return only the JSON matching the provided schema, without a separate summary.
     started = perf_counter()
     try:
         with genai.Client(api_key=api_key, http_options=types.HttpOptions(
-            timeout=60000, retry_options=types.HttpRetryOptions(attempts=1),
+            timeout=30000, retry_options=types.HttpRetryOptions(
+                attempts=2, initial_delay=1, max_delay=1,
+                http_status_codes=[500, 502, 503, 504],
+            ),
         )) as client:
             response = client.models.generate_content(
                 model=model, contents=prompt,
@@ -76,9 +79,16 @@ Return only the JSON matching the provided schema, without a separate summary.
         research = check_research(draft, transcript_text, year, model, omitted)
         return {**legacy_analysis(research), "research": research}
     except errors.APIError as error:
+        # Log identifiers, never provider messages (which can contain request data).
+        logging.getLogger("uvicorn.error").error(
+            "AI failed model=%s http_status=%s seconds=%.3f", model, error.code, perf_counter() - started,
+        )
         if error.code == 429:
-            raise RuntimeError("The AI provider's quota is currently exhausted. Please try again later.") from error
-        raise RuntimeError("The AI provider is unavailable. Please try again later.") from error
+            raise RuntimeError("Gemini's request limit or quota has been reached. Please try again later; no report was created.") from error
+        if error.code in (400, 401, 403, 404):
+            raise RuntimeError(f"AI analysis needs a server configuration fix (Gemini {error.code}). Trying another company will not resolve this.") from error
+        retry_note = " after one retry" if error.code in (500, 502, 503, 504) else ""
+        raise RuntimeError(f"Gemini could not complete this report{retry_note} (HTTP {error.code}). Please try again shortly.") from error
     except httpx.HTTPError as error:
         raise RuntimeError("The AI provider did not respond in time. Please try again later.") from error
     except ValidationError as error:

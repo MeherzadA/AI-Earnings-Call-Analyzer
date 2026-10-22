@@ -1,6 +1,8 @@
 """Fetch one earnings call with Parquet HTTP range reads, not a full download."""
 
 import os
+import json
+from pathlib import Path
 from functools import lru_cache
 from time import time
 from threading import Lock
@@ -17,6 +19,20 @@ COVERAGE_SQL = """SELECT fiscal_year, fiscal_quarter, report_date FROM read_parq
     WHERE symbol = ? AND fiscal_year IS NOT NULL AND fiscal_quarter BETWEEN 1 AND 4
       AND (report_date IS NULL OR TRY_CAST(report_date AS DATE) <= CURRENT_DATE)
     ORDER BY fiscal_year DESC, fiscal_quarter DESC"""
+
+
+@lru_cache(maxsize=1)
+def company_catalog():
+    return json.loads(Path(__file__).with_name("transcript_companies.json").read_text(encoding="utf-8"))["companies"]
+
+
+def search_companies(query: str) -> list[dict]:
+    """Autocomplete only companies present in the transcript archive."""
+    query = query.strip().casefold()
+    if not query:
+        return []
+    matches = [item for item in company_catalog() if query in item["symbol"].casefold() or query in item["name"].casefold()]
+    return sorted(matches, key=lambda item: (item["symbol"].casefold() != query, not item["symbol"].casefold().startswith(query), item["symbol"]))[:8]
 
 
 def available_calls(ticker: str) -> list[dict]:
@@ -43,6 +59,13 @@ def _available_calls(ticker, hour):
 
 
 def fetch_transcript(ticker: str, year: int, quarter: int) -> dict | None:
+    # Keep a fetched call through AI failures so a retry doesn't scan Parquet again.
+    record = _fetch_transcript(ticker.upper(), year, quarter, int(time() // 3600))
+    return dict(record) if record else None
+
+
+@lru_cache(maxsize=16)
+def _fetch_transcript(ticker, year, quarter, hour):
     config = {"memory_limit": "128MB", "threads": "1"}
     if os.getenv("DUCKDB_EXTENSION_DIRECTORY"):
         config["extension_directory"] = os.environ["DUCKDB_EXTENSION_DIRECTORY"]

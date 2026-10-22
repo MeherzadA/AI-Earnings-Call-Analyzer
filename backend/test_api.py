@@ -182,6 +182,8 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(self.client.get("/transcripts/VET/periods").status_code,502)
             self.assertEqual(self.client.get("/transcripts/INVALID!/periods").status_code,422)
             ai.assert_not_called()
+        self.assertEqual(self.client.get('/transcripts/search',params={'q':'Microsoft'}).json()['companies'][0]['symbol'],'MSFT')
+        self.assertNotIn('VS',[item['symbol'] for item in self.client.get('/transcripts/search',params={'q':'VS'}).json()['companies']])
 
     def test_model_uses_a_bounded_thinking_budget_and_still_checks_sources(self):
         with patch.dict(os.environ,{"GEMINI_MODEL":"gemini-2.5-flash"}), patch.object(analysis.genai,"Client") as client:
@@ -190,6 +192,43 @@ class AnalysisFlowTests(unittest.TestCase):
             checked=analysis.analyze_transcript("AAPL",2024,1,SOURCE)
             self.assertEqual(generate.call_args.kwargs["config"].thinking_config.thinking_budget,1024)
             self.assertEqual(checked["research"]["checks"]["findings_retained"],1)
+            options=client.call_args.kwargs["http_options"]
+            self.assertEqual(options.retry_options.attempts, 2)
+            self.assertEqual(options.retry_options.http_status_codes, [500, 502, 503, 504])
+            self.assertEqual(options.timeout, 30000)
+
+    def test_ai_failure_returns_without_waiting_but_keeps_provider_concurrency_bounded(self):
+        started, release, finished = Event(), Event(), Event()
+        def sources(*args, **kwargs):
+            started.set()
+            release.wait(3)
+            finished.set()
+            return {}
+        def ai(**kwargs):
+            self.assertTrue(started.wait(2))
+            raise RuntimeError("Gemini temporarily busy")
+        with patch.object(main,"fetch_transcript",return_value={"content":SOURCE,"report_date":"2024-02-01"}), patch.object(main,"fetch_context_sources",side_effect=sources), patch.object(main,"analyze_transcript",side_effect=ai):
+            try:
+                response=self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1})
+                self.assertEqual(response.status_code,503)
+                self.assertFalse(finished.is_set(), "HTTP failure must not wait for news retrieval")
+                self.assertEqual(self.client.post("/analyze",json={"ticker":"AAPL","year":2024,"quarter":1}).status_code,429)
+            finally:
+                release.set()
+                main.report_workers.submit(lambda: None).result(timeout=3)
+                # Wait for the generation cleanup, including its lock release.
+                self.assertTrue(main.generation_lock.acquire(timeout=3))
+                main.generation_lock.release()
+        self.assertEqual(self.client.get("/history").json()["total"],0)
+
+    def test_ai_errors_preserve_status_without_exposing_provider_message(self):
+        for code, hint in [(400,"configuration"),(403,"configuration"),(404,"configuration"),(503,"one retry")]:
+            with self.subTest(code=code), patch.object(analysis.genai,"Client") as client, self.assertLogs("uvicorn.error",level="ERROR") as logs:
+                client.return_value.__enter__.return_value.models.generate_content.side_effect=errors.APIError(code,{"error":{"message":"private provider detail"}})
+                with self.assertRaisesRegex(RuntimeError,hint):
+                    analysis.analyze_transcript("MSFT",2020,3,SOURCE)
+                self.assertIn(f"http_status={code}", logs.output[0])
+                self.assertNotIn("private provider detail", logs.output[0])
 
     def test_legacy_reports_are_retired_without_deleting_or_generating(self):
         with database.SessionLocal() as db:
