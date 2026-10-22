@@ -108,24 +108,16 @@ export default function ResearchReport({ result, view = "overview", onSource, on
           {sourceQuote && <section className="source-quote" aria-label="Transcript source excerpt"><div className="source-quote-heading"><h2>Transcript excerpt</h2></div><blockquote>“{sourceQuote.quote}”</blockquote><button type="button" onClick={() => openSource(sourceQuote)}>Read in context</button></section>}
           </div>
         </div>
-        <p className="source-scope">The brief uses management’s transcript. Management tone: {research.management_tone} (AI assessment). {concerns.length ? "" : emptyConcern}</p>
       </>}
       {(view === "findings" || view === "concerns") && <section className={`research-findings ${view === "concerns" ? "risk-desk" : "development-desk"}`} aria-labelledby="findings-title">
         <header className="section-dossier"><div><h2 id="findings-title">{view === "concerns" ? "Risks and concerns" : "Findings"}</h2><p>{view === "concerns" ? "Risks and setbacks mentioned in the call." : "Results, guidance and opportunities mentioned in the call."}</p></div><div className="dossier-actions"><span className="dossier-count">{activeFindings.length} {findingLabel}{activeFindings.length === 1 ? "" : "s"}</span><button type="button" onClick={() => openSource()}>Full transcript</button></div></header>
         <p className="section-description">{checked ? "AI-generated analysis. Open a transcript excerpt to check a statement." : "AI-generated analysis. Source excerpts were not recorded."}{view === "concerns" ? " This is not a complete risk assessment." : " Guidance is management’s expectation."}</p>
-        {view === "findings" && research.financial_highlights.length > 0 && <details className="all-financials"><summary>Financial highlights from the call</summary><div className="all-financials-grid">{research.financial_highlights.map((metric) => <article key={metric.id}><p>{metric.label}</p><strong>{metric.value}</strong><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></details>}
+        {view === "findings" && research.financial_highlights.length > 0 && <section className="all-financials" aria-labelledby="financial-highlights-title"><h3 id="financial-highlights-title">Financial highlights from the call</h3><div className="all-financials-grid">{research.financial_highlights.map((metric) => <article key={metric.id}><p>{metric.label}</p><strong>{metric.value}</strong><Evidence citations={metric.citations} onSource={openSource} /></article>)}</div></section>}
         <div className="findings-grid">{activeFindings.slice(0, visibleCount).map((finding) => <FindingCard key={finding.id} finding={finding} onSource={openSource} />)}</div>
         {activeFindings.length > visibleCount && <button type="button" className="outline-btn" onClick={() => setVisibleCount((count) => count + 6)}>Show more findings</button>}
         {view === "concerns" && !concerns.length && <p className="risk-coverage-note">{emptyConcern}</p>}
         {view === "findings" && !developments.length && <p className="section-description">All retained findings are in Concerns & risks.</p>}
       </section>}
       <div hidden={view !== "research"}><ResearchContext result={result} onSource={openSource} active={view === "research"} /></div>
-      <details className="checks-explainer"><summary>Sources, checks & limitations</summary>
-        <p>{checked ? "Every displayed citation was matched to the saved transcript; numeric values were compared with the cited text. These checks do not establish semantic support, independent truth, or complete risk coverage." : "These AI statements were stored without source checks. Their appearance in the current layout does not verify them. No citations have been invented or another analysis generated."}</p>
-        <p>Human review: <strong>not performed</strong>. {checked && `${research.checks.discarded.length} proposed items were omitted by source checks.`}</p>
-        {research.curation && <p>Selected example statements received development-time AI review. {research.curation.changes.filter((change) => change.field === "interpretation" && change.action === "removed").length} unsupported interpretations were removed. Concern categories may also be curated. <a href="/review.html">Inspect original drafts and assessments ↗</a></p>}
-        {checked && <p className="report-provenance">{research.model} · {research.prompt_version} · {new Date(research.generated_at).toLocaleDateString()}</p>}
-        <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/blob/main/docs/evaluation.md" target="_blank" rel="noreferrer">Evaluation method & limitations ↗</a>
-      </details>
   </>;
 }
