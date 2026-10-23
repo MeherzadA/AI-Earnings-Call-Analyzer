@@ -1,5 +1,15 @@
 # Deployment checks
 
+## Vercel backend migration — October 22, 2026
+
+The backend project is `earnings-analyzer-api`, rooted at `backend`, on Vercel Hobby in Portland (`pdx1`). Its production URL is `https://earnings-analyzer-api.vercel.app`; the existing frontend project and light UI remain in place. Reports are stored in Neon Free PostgreSQL in Oregon. Render is retained only for rollback after cutover.
+
+Vercel uses `backend/.python-version` (Python 3.12) and `backend/vercel.json` (300-second request limit). The build installs DuckDB's signed HTTP extension, avoiding installation into the read-only runtime filesystem. Backend environment variables are `DATABASE_URL` with `sslmode=verify-full&channel_binding=require`, `GEMINI_API_KEY`, `DUCKDB_EXTENSION_DIRECTORY=duckdb_extensions` and `XDG_CACHE_HOME=/tmp`; leave `DATABASE_SSL_ROOT_CERT` unset to use Certifi. Keep backend credentials out of frontend variables. The frontend's optional `VITE_API_BASE_URL` must point to the new backend or be unset to use its new default.
+
+Vercel can start new function instances, so a Postgres transaction reservation retains the single-generation limit across them. Its [free duration and resource limits](https://vercel.com/docs/functions/limitations) still apply, and cold starts remain possible. This removes the dependency on Render's idle service wake-up; it does not establish a new-report generation speedup. Local correctness checks and real HTTP timings are separate evidence.
+
+The records below describe earlier deployments.
+
 The public frontend is hosted on Vercel, the API on Render, and PostgreSQL on Supabase Free. Production was verified end to end on October 18, 2026.
 
 ## Verified evidence-report release

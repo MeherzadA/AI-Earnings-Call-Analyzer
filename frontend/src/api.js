@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env?.VITE_API_BASE_URL || "https://earnings-analyzer-er72.onrender.com").replace(/\/+$/, "");
+const API_BASE = (import.meta.env?.VITE_API_BASE_URL || "https://earnings-analyzer-api.vercel.app").replace(/\/+$/, "");
 
 export async function streamAnalysis(period, onEvent) {
   const controller = new AbortController();
