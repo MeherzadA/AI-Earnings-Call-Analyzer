@@ -66,6 +66,18 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(history["history"][0]["ticker"], "AAPL")
             self.assertEqual(history["history"][0]["call_date"], "2024-02-01")
 
+    def test_shared_generation_reservation_blocks_both_routes_before_providers(self):
+        with patch.object(main, "reserve_generation", side_effect=main.HTTPException(429, "Another report is running.")), patch.object(main, "fetch_transcript") as transcript, patch.object(main, "analyze_transcript") as ai:
+            request = {"ticker":"AAPL", "year":2024, "quarter":1}
+            self.assertEqual(self.client.post("/analyze", json=request).status_code, 429)
+            stream = self.client.post("/analyze/stream", json=request)
+            self.assertIn('"type": "error"', stream.text)
+            self.assertIn("Another report is running.", stream.text)
+            transcript.assert_not_called()
+            ai.assert_not_called()
+        self.assertFalse(main.generation_lock.locked())
+        self.assertFalse(main.stream_lock.locked())
+
     def test_longer_prices_preserve_the_brief_and_reuse_the_cached_window(self):
         initial = {"return_1day": 1, "return_5day": 5, "daily_prices": [{"date":"2024-02-01", "price":100 + i} for i in range(6)]}
         with patch.object(main, "fetch_transcript", return_value={"content":SOURCE, "report_date":"2024-02-01"}), patch.object(main, "analyze_transcript", return_value=REPORT), patch.object(main, "get_stock_returns", return_value=initial):

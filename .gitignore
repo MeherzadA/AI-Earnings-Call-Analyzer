@@ -22,3 +22,5 @@ backend/.cache/
 
 .runtime/
 frontend/dist/
+.vercel/
+backend/duckdb_extensions/

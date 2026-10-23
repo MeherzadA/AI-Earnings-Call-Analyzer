@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "python build_vercel.py",
+  "regions": ["pdx1"],
+  "functions": {
+    "main.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{test_*.py,__pycache__/**,.env*,evaluation/**,*.db}"
+    }
+  }
+}
