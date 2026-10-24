@@ -95,6 +95,39 @@ class AnalysisFlowTests(unittest.TestCase):
             self.assertEqual(prices.call_count, 2)
             ai.assert_not_called()
 
+    def test_empty_price_recovery_and_news_refresh_never_regenerate_analysis(self):
+        with patch.object(main, "fetch_transcript", return_value={"content":SOURCE, "report_date":"2024-02-01"}), patch.object(main, "analyze_transcript", return_value=REPORT):
+            original = self.client.post("/analyze", json={"ticker":"LITE", "year":2024, "quarter":1}).json()
+        path = f"/reports/{original['report_id']}"
+        fresh = {**CONTEXT, "news":{"status":"empty", "items":[], "checked_at":main.datetime.now(main.timezone.utc).isoformat()}}
+        with patch.object(main, "analyze_transcript") as ai, patch.object(main, "build_context", return_value=fresh) as context:
+            failed = self.client.post(path + "/prices")
+            self.assertEqual(failed.status_code, 503)
+            self.assertNotIn("five-day chart", failed.json()["detail"])
+            updated = self.client.post(path + "/context?refresh_news=true")
+            self.assertEqual(updated.status_code, 200, updated.text)
+            self.assertTrue(context.call_args.kwargs["refresh_news"])
+            self.assertEqual(self.client.post(path + "/context?refresh_news=true").status_code, 429)
+            context.assert_called_once()
+            self.assertEqual(self.client.get(path).json()["analysis"], original["analysis"])
+            ai.assert_not_called()
+
+    def test_history_filters_all_saved_reports_by_company_and_paginates(self):
+        with patch.object(main, "fetch_transcript", return_value={"content":SOURCE, "report_date":"2024-02-01"}), patch.object(main, "analyze_transcript", return_value=REPORT):
+            for ticker in ("LITE", "MSFT", "AAPL"):
+                self.client.post("/analyze", json={"ticker":ticker, "year":2024, "quarter":1})
+        first = self.client.get("/history?limit=1").json()
+        second = self.client.get("/history?limit=1&offset=1").json()
+        self.assertEqual(first["total"], 3)
+        self.assertNotEqual(first["history"][0]["report_id"], second["history"][0]["report_id"])
+        found = self.client.get("/history?q=Lumentum&limit=1").json()
+        self.assertEqual(found["total"], 1)
+        self.assertEqual(found["history"][0]["ticker"], "LITE")
+        self.assertIn("Lumentum", found["history"][0]["company_name"])
+        self.assertEqual(self.client.get("/history?q=2024-02-01").json()["total"], 3)
+        self.assertEqual(self.client.get("/history?q=Q1").json()["total"], 3)
+        self.assertEqual(self.client.get("/history?q=%25").json()["total"], 0)
+
     def test_future_call_date_is_rejected_before_generation_not_by_fiscal_year(self):
         main.ensure_past_call("2025-11-19")  # NVIDIA fiscal 2026 was reported in calendar 2025.
         with patch.object(main, "fetch_transcript", return_value={"content": SOURCE, "report_date": "2099-11-19"}), patch.object(main, "analyze_transcript") as ai:

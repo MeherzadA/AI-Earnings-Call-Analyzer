@@ -8,12 +8,11 @@ import xml.etree.ElementTree as ET
 import requests
 
 from research import source_hash, source_passages, quantities
-from transcript import fetch_transcript
+from transcript import fetch_transcript, company_name
 from comparisons import additional_comparisons
 
 USER_AGENT = "EarningsAnalyzer/1.0 (https://github.com/MeherzadA/AI-Earnings-Call-Analyzer)"
-NAMES = {"AAPL": "Apple", "MSFT": "Microsoft", "NVDA": "NVIDIA", "PYPL": "PayPal"}
-CONTEXT_VERSION = 6
+CONTEXT_VERSION = 7
 
 
 def context_complete(context):
@@ -40,10 +39,40 @@ def money(value):
     return f"${value / Decimal(10**9):g} billion"
 
 
-def revenue_highlight(research):
+def reporting_scope(text, start, end, quarter, year=None):
+    """Use the nearest stated period; leave ambiguous or wrong-quarter figures unconfirmed."""
+    quote = text[start:end]
+    if re.search(r"\b(?:annual (?:(?:financial|company|consolidated|total) )?(?:comparisons|results|revenue|net sales|sales|performance)|full[ -]year)\b", quote, re.I):
+        return "annual"
+    scope = text[:end]
+    markers = list(re.finditer(r"\b(?:annual (?:(?:financial|company|consolidated|total) )?(?:comparisons|results|revenue|net sales|sales|performance)|full[ -]year|Q[1-4]|(?:first|second|third|fourth)[ -]quarter|this quarter|quarterly|(?:January|February|March|April|May|June|July|August|September|October|November|December) quarter)\b(?:\s+(?:of\s+)?(?:fiscal\s+|FY\s*)?(?:year\s+)?(20\d{2}))?", scope, re.I))
+    if not markers:
+        return "unconfirmed"
+    marker = markers[-1]
+    term = marker[0].lower()
+    if marker[1] and year and int(marker[1]) != year:
+        return "unconfirmed"
+    if re.match(r"annual|full[ -]year", term):
+        return "annual"
+    explicit = re.match(r"q([1-4])|(?P<ordinal>first|second|third|fourth)[ -]quarter", term)
+    if explicit:
+        found = int(explicit[1]) if explicit[1] else ("first", "second", "third", "fourth").index(explicit["ordinal"]) + 1
+        return "quarter" if found == quarter else "unconfirmed"
+    # Generic/month-named quarters must be in the cited result, not a distant remark.
+    return "quarter" if marker.start() >= len(scope) - len(quote) else "unconfirmed"
+
+
+def revenue_highlight(research, text="", quarter=None, year=None):
     for item in research.get("financial_highlights", []):
         label = item["label"].lower()
-        if re.search(r"\b(revenue|net sales)\b", label) and not any(word in label for word in ("annual", "full year", "cloud", "services", "iphone", "data center", "segment")):
+        if quarter and not any(
+            isinstance(citation.get("start"), int)
+            and text[citation["start"]:citation["end"]] == citation["quote"]
+            and reporting_scope(text, citation["start"], citation["end"], quarter, year) == "quarter"
+            for citation in item["citations"]
+        ):
+            continue
+        if re.search(r"\b(revenue|net sales)\b", label) and not any(word in label for word in ("annual", "full year", "cloud", "services", "iphone", "data center", "gaming", "networking", "automotive", "segment")):
             amounts = [value for value, kind, currency in quantities(item["value"]) if currency == "$" and kind == "number"]
             if len(amounts) == 1:
                 result = {"label": item["label"], "value": item["value"], "amount": amounts[0], "citations": item["citations"], "period_terms": []}
@@ -60,18 +89,20 @@ def revenue_highlight(research):
     return None
 
 
-def transcript_revenue(text, quarter=None):
+def transcript_revenue(text, quarter=None, year=None):
     """Literal fallback for older reports: require explicit company/quarter scope, never infer a value."""
     quarter_scope = rf"Q{quarter} revenue|{('first', 'second', 'third', 'fourth')[quarter - 1]}[ -]quarter revenue|" if quarter else ""
     for passage in source_passages(text):
         for sentence in re.split(r"(?<=[.!?])\s+(?=[A-Z])", passage["text"]):
             if re.search(r"\b(?:expect|forecast|guidance|annual|full year|segment|services|gaming|data center|cloud)\b", sentence, re.I):
                 continue
-            match = re.search(rf"\b(?:{quarter_scope}total (?:company )?revenue(?: for (?:the|this|our) quarter)?|quarterly revenue|revenue for (?:the|this|our|the fourth|the third|the second|the first) quarter)\s+(?:was|were|of|reached|totaled|came in at)\s+(?:a record |record )?\$(\d[\d,.]*)\s*(billion|million)\b", sentence, re.I)
+            match = re.search(rf"\b(?:{quarter_scope}total (?:company )?revenue(?: for (?:the|this|our) quarter)?|net sales|quarterly revenue|revenue for (?:the|this|our|the fourth|the third|the second|the first) quarter)\s+(?:was|were|of|reached|totaled|came in at)\s+(?:a record |record |just |approximately )?\$(\d[\d,.]*)\s*(billion|million)\b", sentence, re.I)
             if not match:
                 continue
             value = re.search(r"\$\d[\d,.]*\s*(?:billion|million)", match[0], re.I)[0]
             start = passage["start"] + passage["text"].index(sentence)
+            if quarter and reporting_scope(text, start, start + len(sentence), quarter, year) != "quarter":
+                continue
             return {"label": "Quarterly revenue", "value": value, "citations": [{"passage_id": passage["id"], "quote": sentence, "start": start, "end": start + len(sentence)}]}
     return None
 
@@ -168,8 +199,8 @@ def compare_outlook(outlooks, actual):
 def dated_news(ticker, call_date):
     end = date.fromisoformat(call_date)
     start = end - timedelta(days=14)
-    company = NAMES.get(ticker, ticker)
-    query = f'"{company}" earnings after:{start} before:{end + timedelta(days=1)}'
+    company = re.sub(r"\s+(?:Inc\.?|Corporation|Corp\.?)$", "", company_name(ticker), flags=re.I)
+    query = f'("{company}" OR "{ticker}") (earnings OR results) after:{start} before:{end + timedelta(days=1)}'
     raw = download("https://news.google.com/rss/search", params={"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}, limit=1_000_000)
     if b"<!ENTITY" in raw.upper() or b"<!DOCTYPE" in raw.upper():
         raise RuntimeError("Unexpected feed format.")
@@ -193,7 +224,7 @@ def dated_news(ticker, call_date):
             sources.add(item["source"])
         if len(selected) == 5:
             break
-    return {"status": "available" if selected else "empty", "start": str(start), "end": str(end), "items": selected,
+    return {"status": "available" if selected else "empty", "start": str(start), "end": str(end), "items": selected, "checked_at": datetime.now(timezone.utc).isoformat(),
             "limitation": "Headline metadata from Google News RSS, not read or verified article content. UTC publication dates only; same-day articles may be after the call. Historical feed coverage is incomplete."}
 
 
@@ -211,11 +242,11 @@ def fetch_context_sources(ticker, year, quarter, call_date, previous=None, cache
         try:
             news = dated_news(ticker, call_date)
         except (requests.RequestException, RuntimeError, ValueError, KeyError, ET.ParseError) as error:
-            news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": []}
+            news = {"status": "unavailable", "message": str(error) if isinstance(error, RuntimeError) else "Headlines could not be loaded.", "items": [], "checked_at": datetime.now(timezone.utc).isoformat()}
     return {"previous": previous, "previous_error": previous_error, "news": news}
 
 
-def build_context(ticker, year, quarter, research, call_date, previous=None, current_text="", sources=None):
+def build_context(ticker, year, quarter, research, call_date, previous=None, current_text="", sources=None, refresh_news=False):
     if not call_date:
         current = fetch_transcript(ticker, year, quarter)
         call_date = current.get("report_date") if current else None
@@ -223,12 +254,12 @@ def build_context(ticker, year, quarter, research, call_date, previous=None, cur
         raise RuntimeError("The call date could not be established. Dated research was not loaded.")
     call_date = date.fromisoformat(call_date[:10]).isoformat()
     previous_year, previous_quarter = (year, quarter - 1) if quarter > 1 else (year - 1, 4)
-    actual = revenue_highlight(research)
+    actual = revenue_highlight(research, current_text, quarter, year)
     if actual is None:
-        literal = transcript_revenue(current_text, quarter)
+        literal = transcript_revenue(current_text, quarter, year)
         actual = revenue_highlight({"financial_highlights": [literal]}) if literal else None
     prior = {"year": previous_year, "quarter": previous_quarter, "outlooks": []}
-    sources = sources if sources is not None else fetch_context_sources(ticker, year, quarter, call_date, previous, research.get("context"))
+    sources = sources if sources is not None else fetch_context_sources(ticker, year, quarter, call_date, previous, None if refresh_news else research.get("context"))
     previous = sources["previous"]
     if previous and previous.get("report_date") and previous["report_date"][:10] >= call_date:
         previous = None
