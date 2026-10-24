@@ -9,8 +9,6 @@
 .research-desk .brand-name em { margin-left:3px; color:#b34425; font:italic 25px/1 Georgia,serif; letter-spacing:-.6px; box-shadow:inset 0 -5px #ffe7a6; }
 .research-desk .brand-name strong { font-weight:700; }
 .research-desk .brand { gap:11px; }
-.brand-smiley { flex:none; width:37px; height:37px; color:#27303b; }
-.brand-smiley text { font:13px Georgia,serif; }
 .research-desk .header-nav .source-link { gap:7px; }
 .github-mark { width:18px; height:18px; flex:none; }
 .research-desk .header-nav a,.research-desk .header-nav button { color:#53616f; }
@@ -163,7 +161,6 @@
  .research-desk .header-inner { padding:12px; gap:9px; flex-wrap:wrap; }
  .research-desk .brand-name { font-size:18px; }
  .research-desk .brand-name em { font-size:21px; }
- .brand-smiley { width:32px; height:32px; }
  .research-desk .brand { gap:9px; }
  .market-home .main { padding:18px 12px 26px; gap:17px; }
  .market-home .search-section { padding:11px 12px 9px; }
