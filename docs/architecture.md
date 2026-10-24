@@ -35,21 +35,3 @@ These are mechanical checks. A matching quotation can still accompany an unsuppo
 Guidance comparisons require matching periods, metrics, and reporting bases. Ambiguous comparisons stay unscored. Historical prices show subsequent movement, not proof that the call caused it.
 
 Google News RSS supplies dated headline links around the call. Article contents are not read or sent to Gemini. Missing context and provider failures are shown explicitly; retrying unavailable context does not regenerate the report.
-
-## Operational limits
-
-Process locks bound local work, and a PostgreSQL transaction reservation limits generation across serverless instances to protect provider quota. Transcript reads share one DuckDB connection per instance with a memory limit.
-
-The app depends on external transcript, model, news, and price providers. Coverage and availability vary. Original report fields remain stored when a legacy report receives source-linked research.
-
-## Verification
-
-From the repository root, with backend dependencies installed:
-
-```text
-python -m unittest discover -s backend
-npm --prefix frontend test
-npm --prefix frontend run build
-```
-
-Tests use synthetic data, mocked providers, and temporary SQLite storage. They cover API caching and persistence, streaming, citation and number validation, comparison rules, price calculations, report navigation, audio controls, and the stock strip. They do not consume model quota or establish real-world report accuracy.
