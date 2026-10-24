@@ -1,21 +1,4 @@
-"""
-In your terminal make sure you're in the `backend` folder and run:
-uvicorn main:app --reload
-
-http://127.0.0.1:8000/docs for FastAPi auto-generated documentaiton
-"""
-
-
-"""
-cd backend
-source venv/bin/activate
-"""
-
-
-# 127.0.0.1 is localhost IP address
-# we are listening on port 8000
-
-
+"""API routes for earnings reports, transcript sources, and market context."""
 
 import json
 import logging

@@ -1,82 +1,29 @@
-# Deployment checks
+# Deployment
 
-## Vercel backend migration — October 22, 2026
+The frontend and FastAPI backend run as separate Vercel projects. Saved reports live in Neon PostgreSQL.
 
-The backend project is `earnings-analyzer-api`, rooted at `backend`, on Vercel Hobby in Portland (`pdx1`). Its production URL is `https://earnings-analyzer-api.vercel.app`; the existing frontend project and light UI remain in place. Reports are stored in Neon Free PostgreSQL in Oregon. Render is retained only for rollback after cutover.
+| Service | Configuration |
+| --- | --- |
+| Frontend | Root `frontend`, Vite build, output `dist`; framework declared in `frontend/vercel.json`. |
+| Backend | Root `backend`, Python 3.12 from `backend/.python-version`; `backend/vercel.json` sets region `pdx1` and a 300-second request limit. |
+| PostgreSQL | Neon; tables in `backend/schema.sql`, mirrored by `backend/models.py`. |
 
-Vercel uses `backend/.python-version` (Python 3.12) and `backend/vercel.json` (300-second request limit). The build installs DuckDB's signed HTTP extension, avoiding installation into the read-only runtime filesystem. Backend environment variables are `DATABASE_URL` with `sslmode=verify-full&channel_binding=require`, `GEMINI_API_KEY`, `DUCKDB_EXTENSION_DIRECTORY=duckdb_extensions` and `XDG_CACHE_HOME=/tmp`; leave `DATABASE_SSL_ROOT_CERT` unset to use Certifi. Keep backend credentials out of frontend variables. The frontend's optional `VITE_API_BASE_URL` must point to the new backend or be unset to use its new default.
+The API is hosted at `https://earnings-analyzer-api.vercel.app`. `backend/build_vercel.py` bundles DuckDB's signed HTTP extension before the function starts, avoiding installation into the read-only runtime filesystem.
 
-Vercel can start new function instances, so a Postgres transaction reservation retains the single-generation limit across them. Its [free duration and resource limits](https://vercel.com/docs/functions/limitations) still apply, and cold starts remain possible. This removes the dependency on Render's idle service wake-up; it does not establish a new-report generation speedup. Local correctness checks and real HTTP timings are separate evidence.
+## Configuration
 
-The records below describe earlier deployments.
+Set `DATABASE_URL` and `GEMINI_API_KEY` in the backend hosting environment. The Neon connection uses `sslmode=verify-full&channel_binding=require`. Leave `DATABASE_SSL_ROOT_CERT` unset to use Certifi's trust bundle. Keep connection URLs and API keys out of the repository and restrict database credentials to the backend.
 
-The public frontend is hosted on Vercel, the API on Render, and PostgreSQL on Supabase Free. Production was verified end to end on October 18, 2026.
+Set `DUCKDB_EXTENSION_DIRECTORY=duckdb_extensions` and `XDG_CACHE_HOME=/tmp` for the Vercel function. `GEMINI_MODEL` optionally overrides the default model in `backend/analysis.py`.
 
-## Verified evidence-report release
+The frontend accepts `VITE_API_BASE_URL` at build time and otherwise uses the hosted Vercel API. All `VITE_` values are public browser configuration; backend credentials must stay on the server.
 
-The subsequent workspace update replaces fragment links with stateful report views and adds optional cached research context. It requires no new database column. Deploy the backend providing `POST /reports/{id}/context` before releasing the frontend's Research context view. Switching views must not issue another report read; loading context must not call Gemini. SEC failures remain visible rather than counting as completed checks. See [research context details](research-context.md).
+The Render configuration, root Python version pin, and Supabase certificate are retained for rollback. They do not describe the active Vercel and Neon deployment.
 
-- [Release PR #6](https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/pull/6) merged as `f1359d79ed4b2b2321b0bda1eab4e89923388a12`. Vercel reported a successful production deployment for that merge. Render deployed backend commit `dfa2c09adc4678550e9581ccf587f2b94eb8423b`; the subsequent code change was one frontend CSS rule.
-- Render build logs confirmed Python 3.11.17, successful application startup and HTTP 200 database health before the new frontend was released.
-- A fresh private backup preceded the nullable-column migration. The migration and example seeding preserved all 19 transcripts, 10 analyses, original fields and table RLS settings. TLS certificate verification remained enabled. The local PostgreSQL database was untouched.
-- The three examples were seeded from already-generated snapshots after source-hash, citation-offset and quantity checks. Six interpretations judged insufficient by the documented AI review were removed; the original assessed drafts remain in the public evaluation files. No independent human review has been performed.
-- One fresh public MSFT fiscal Q2 2024 request produced [report 20](https://earnings-analyzer-vercel2.vercel.app/?report=20), with four findings, financial highlights and Yahoo prices. The displayed call-day, next-day and fifth-day closes were $408.59, $397.58 and $405.49. Its transcript viewer loaded 43 passages and highlighted the selected quotation. Reloading the share URL showed “Saved report.”
-- The permanent [review evidence page](https://earnings-analyzer-vercel2.vercel.app/review.html) displayed all 18 AI assessments: 12 supported, 6 insufficiently supported, 0 contradicted. Human assessments remain separate at zero.
-- Before rollout, 29 Python tests, 7 Node tests and the production build passed. Local phone layouts and source/legacy states were checked. Final public verification was deliberately limited to the fresh report/source/saved-link flow at the owner's request; it was not a repeat of the full test matrix.
+## Schema and release checks
 
-## Initial database repair verification
+Back up an existing database before applying `backend/migrations/001_research_reports.sql`. It adds the nullable `research_json` column without replacing original report fields. SQLAlchemy's `create_all()` creates missing tables but does not migrate existing columns.
 
-- Frontend: [earnings-analyzer-vercel2.vercel.app](https://earnings-analyzer-vercel2.vercel.app).
-- API: [database health](https://earnings-analyzer-er72.onrender.com/health), returning HTTP 200 with `database: connected`.
-- Both hosts deployed merge commit `d4653e795739bdae0cc8576c300889a89f9b9f4e` from [repair PR #4](https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/pull/4). Render's build log confirmed Python 3.11.17.
-- Restored all 17 existing transcripts and 8 analyses from local PostgreSQL into a separate Supabase project, preserving their fields and timestamps. The original local database remains at 17 transcripts and 8 analyses.
-- A fresh AAPL fiscal Q1 2024 request through the public interface fetched a 44,035-character transcript, produced a Gemini report, fetched six Yahoo closing prices, and saved both records. Production then contained 18 transcripts and 9 analyses.
-- A repeated public request returned `cached: true` in about 0.3 seconds. All four history sort modes returned HTTP 200, and both the new Apple report and a restored NVIDIA report reopened through the UI.
-- Apple prices covered February 1–8, 2024: call-day close $186.86, next trading day $185.85, fifth trading day $188.32. Returns were −0.54% and +0.78%. The chart and expandable table displayed those values.
-- A real missing-transcript request for ZZZZZZZZ Q1 2024 returned HTTP 404 and a readable public UI error. No partial transcript or analysis was saved.
-- Loading state, keyboard insight tabs, and phone layouts at 390 and 320 pixels were checked in the public browser. The expanded price table and chart caused no document overflow.
-- Automated verification: 14 Python tests and 5 Node tests passed; the frontend production build passed. These tests use mocked providers and temporary SQLite, separately from the live checks above.
+Run the [automated checks](architecture.md#verification), then deploy the backend before a frontend that depends on new endpoints. Confirm `/health` returns HTTP 200 with a connected database and the expected schema. Check a report, its transcript and price history, saved-link reopening, an unavailable transcript, and a phone layout.
 
-## Diagnosis
-
-The old Render revision `865aee4` failed during database startup because its configured hostname could not be resolved. The old database resource was unavailable in the only accessible Render workspace, and its direct dashboard URL reported that it did not exist. This does not establish why the resource became unavailable. After investigating that setup, the user selected Supabase Free for replacement storage.
-
-Review also found an obsolete transcript dataset path, full-dataset downloading unsuitable for the free instance, an anonymous-analysis schema mismatch, and fragile provider/error handling. The repair reused inspected fixes from unpublished commit `4e8074b`, added safe database diagnostics and joined history queries, and improved the existing React interface. No paid plan was enabled.
-
-## Existing configuration
-
-- Render: repository branch `main`, root `backend`, build `pip install -r requirements.txt`, start `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- Render health-check path: `/health`. The existing service is manually configured; changing `render.yaml` alone does not update dashboard settings.
-- Python: `.python-version` pins 3.11.17. A manually set `PYTHON_VERSION` takes precedence; inspect build logs to confirm the runtime actually selected.
-- Vercel: repository branch `main`, root `frontend`, Vite build output `dist`. `frontend/vercel.json` declares Vite explicitly so the deployment does not inherit an incorrect dashboard framework preset.
-- Backend credentials: `DATABASE_URL`, `GEMINI_API_KEY`; optional `GEMINI_MODEL`. Store these only in the backend hosting environment.
-- Frontend: optional build-time `VITE_API_BASE_URL` and `VITE_FMP_API_KEY`. The existing Render URL is the default API base. All `VITE_` values are public.
-- `render.yaml` requires an existing database connection and does not provision or purchase a database.
-
-## Supabase connection
-
-Use the existing SQLAlchemy/psycopg2 backend with Supabase's **Session pooler** connection on port 5432. Obtain the actual hostname and username from the project's Connect dialog. The session pooler supports IPv4 on the Free plan without an IPv4 add-on.
-
-Set `sslmode=verify-full` in the backend connection URL and `DATABASE_SSL_ROOT_CERT=supabase-ca.crt` in Render. The public CA certificate was downloaded from Supabase's authenticated Database Settings page ([official certificate](https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt)). A custom certificate path is resolved relative to `backend`; without one, the backend uses Certifi's standard trust bundle. Keep the connection URL in Render's environment settings. Enable row-level security on app tables and leave them inaccessible to Supabase's anonymous/authenticated Data API roles; the backend owns database access.
-
-Supabase Free may pause projects with low database activity over seven days. It is not an always-on availability guarantee. Source: [connection guidance](https://supabase.com/docs/guides/database/connecting-to-postgres), [pausing policy](https://supabase.com/docs/guides/platform/free-project-pausing).
-
-## Future deployment checks
-
-1. Restore a reachable PostgreSQL connection; investigate existing resources and recovery before replacement. Require the provider's supported TLS configuration. Do not silently fall back to ephemeral SQLite on Render.
-2. Inspect the existing schema. `create_all()` creates missing tables but does not migrate columns. Anonymous analyses require nullable `analyses.user_id`.
-3. Run `python -m unittest discover -s backend`, `npm run test` from `frontend`, and the frontend production build. Automated tests isolate their storage and mock providers.
-4. Deploy the reviewed commit and verify the actual revision and Python runtime in Render and Vercel.
-5. Require `/health` to return 200 with a connected database. Confirm a fresh, real analysis saves, displays prices when available, appears in history, and reopens from cache through the public frontend. Check a missing transcript and a phone layout.
-
-A frontend deployment, a liveness response at `/`, or a local test alone does not establish that the public app is working.
-
-## Evidence-report release rollout
-
-Before deploying the evidence-report backend, export the current `transcripts` and `analyses` rows to a private backup, then apply `backend/migrations/001_research_reports.sql`. It adds only nullable `analyses.research_json`; original report columns remain intact. Check row counts and original values before and after. Do not commit the private backup or connection settings.
-
-The previous backend tolerates this added column. Deploy and verify the new backend before releasing the frontend that uses `/reports` and `/examples`. `/health` checks that the required column exists. Old clients keep cached legacy responses; only explicit `with_research: true` requests upgrade them. Existing report IDs and prices remain stable.
-
-The three prepared examples can be seeded from their already-generated, curated snapshots after verifying transcript hashes and IDs; seeding must not generate reports or replace original fields. A development-time AI review and its corrections are recorded separately; independent human review has not been performed. The review evidence is a versioned project artifact; optional browser assessments require export/import before they become published results.
-
-If code rollback is necessary, leave the additive column and original rows in place. Verify the deployed revision, a fresh analysis, read-only source/history/share reopening, errors, and mobile layouts separately from local test results.
+Serverless cold starts and external-provider availability affect response times. A successful frontend build alone does not establish that the API and database are working.

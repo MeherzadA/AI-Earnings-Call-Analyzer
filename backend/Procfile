@@ -1,3 +1,1 @@
-# Render assigns a dynamic port via the $PORT environment variable. 
-# This tells uvicorn to listen on that port instead of the hardcoded 8000.
-web: uvicorn main:app --host 0.0.0.0 --port $PORT 
+web: uvicorn main:app --host 0.0.0.0 --port $PORT

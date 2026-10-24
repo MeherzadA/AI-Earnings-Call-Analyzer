@@ -13,7 +13,7 @@ TRANSCRIPTS_URL = (
     "https://huggingface.co/datasets/defeatbeta/yahoo-finance-data/resolve/main/"
     "data/US/stock_earning_call_transcripts.parquet"
 )
-# ponytail: one Parquet reader fits the free instance; raise concurrency with more RAM.
+# One Parquet reader fits the instance memory limit; more concurrency needs more RAM.
 _query_lock = Lock()
 _connection = None
 _connection_hour = None
