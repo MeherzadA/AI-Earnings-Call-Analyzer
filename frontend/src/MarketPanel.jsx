@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "./api.js";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { callDateLabel, priceSeries } from "./reportPresentation.js";
+import { callDateLabel, priceSeries, listingNotice } from "./reportPresentation.js";
 
 const signed = (value) => value == null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 const tone = (value) => value > 0 ? "gain" : value < 0 ? "loss" : "";
@@ -27,22 +27,24 @@ export default function MarketPanel({ result, compact = false, onExplore }) {
   }
   useEffect(() => { if (!compact && result.daily_prices?.length < 22 && !attempted.current) { attempted.current = true; loadMonth(); } }, [compact, result.report_id]);
   const all = priceSeries(extended || result);
+  const listing = listingNotice(result.ticker);
   const points = all.slice(0, (compact ? 5 : windowDays) + 1);
   const first = all[0], next = all[1], fifth = all[5], month = all[21];
   const color = (points.at(-1)?.change || 0) < 0 ? "#ce4052" : "#078267";
   const value = mode === "change" ? "change" : "price";
   return <section className={`market-panel market-v2 ${compact ? "market-panel-compact" : ""}`} aria-label="Price action after the call">
     <header className="market-v2-heading"><div><h2>Share price{!compact && <span className="market-ticker">{result.ticker}</span>}</h2>{!compact && first && <p className="market-date-range">{callDateLabel(first.date)} – {callDateLabel(points.at(-1).date)}</p>}</div><span className="market-unit">Daily close · USD</span></header>
-    {!all.length ? <p className="market-empty">Closing prices aren’t available for this call. The transcript and report remain available.</p> : <>
+    {listing && <details className="market-listing-note" open={!compact || !all.length}><summary>{listing.title}</summary><p>{listing.text}</p><p><a href={listing.url} target="_blank" rel="noreferrer">{listing.source} ↗</a> · Checked <time dateTime={listing.checked}>{callDateLabel(listing.checked)}</time></p></details>}
+    {!all.length ? <p className="market-empty">Price history couldn’t be loaded from Yahoo Finance. That alone doesn’t mean the stock was delisted. The transcript and report are still available.</p> : <>
       <div className="market-summary">
         <div className={tone(next?.change)}><span>Next trading day</span><strong className={tone(next?.change)}>{signed(next?.change)}</strong><small>{next ? callDateLabel(next.date) : "Not available"}</small></div>
-        <div className={tone(fifth?.change)}><span>After 5 trading days</span><strong className={tone(fifth?.change)}>{signed(fifth?.change)}</strong><small>{fifth ? callDateLabel(fifth.date) : "Not available"}</small></div>
-        {!compact && <div className={tone(month?.change)}><span>After 1 month · 21 trading days</span><strong className={tone(month?.change)}>{signed(month?.change)}</strong><small>{month ? callDateLabel(month.date) : loading ? "Loading longer history…" : "21st trading-day close not available"}</small></div>}
+        <div className={tone(fifth?.change)}><span>After 5 trading days</span><strong className={tone(fifth?.change)}>{signed(fifth?.change)}</strong><small>{fifth ? callDateLabel(fifth.date) : "Needs 5 post-call closes"}</small></div>
+        {!compact && <div className={tone(month?.change)}><span>After 1 month · 21 trading days</span><strong className={tone(month?.change)}>{signed(month?.change)}</strong><small>{month ? callDateLabel(month.date) : loading ? "Loading longer history…" : "Needs 21 post-call closes"}</small></div>}
       </div>
       <div className="chart-control-row"><div className="chart-segment" aria-label="Chart measure"><button type="button" aria-pressed={mode === "change"} onClick={() => setMode("change")}>Return %</button><button type="button" aria-pressed={mode === "price"} onClick={() => setMode("price")}>Price $</button></div>{!compact && <div className="chart-segment" aria-label="Chart window"><button type="button" aria-pressed={windowDays === 1} onClick={() => setWindowDays(1)}>1 day</button><button type="button" aria-pressed={windowDays === 5} onClick={() => setWindowDays(5)}>5 days</button><button type="button" aria-pressed={windowDays === 21} onClick={() => setWindowDays(21)}>1 month</button></div>}</div>
       {!compact && loading && <p className="market-status" role="status">Loading up to 21 post-call trading days…</p>}
       {!compact && error && <p className="market-status" role="alert">{error} <button type="button" className="text-btn" onClick={loadMonth}>Retry prices</button></p>}
-      {!compact && !loading && windowDays > all.length - 1 && <p className="market-status">Only {all.length - 1} post-call trading {all.length === 2 ? "day is" : "days are"} available. The chart ends on the last available close.</p>}
+      {!compact && !loading && windowDays > all.length - 1 && <p className="market-status">Only {all.length - 1} post-call trading {all.length === 2 ? "day is" : "days are"} available. This window needs {windowDays} post-call trading-day closes. The chart ends on the last available close.</p>}
       <div className="price-chart" aria-label={`${result.ticker} ${mode === "change" ? "return from call-day close" : "closing price"}`}>
         <ResponsiveContainer width="100%" height={compact ? 210 : 340}>
           <AreaChart data={points} margin={{ top: 20, right: 15, left: compact ? -18 : 0, bottom: 8 }} accessibilityLayer>
