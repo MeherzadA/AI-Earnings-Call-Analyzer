@@ -35,4 +35,4 @@ AI can misread a transcript even when the quotes and numbers match. Reports have
 
 ## Inside the project
 
-[Architecture and source checks](docs/architecture.md) · [Deployment](docs/deployment.md) · [Asset credits](docs/assets.md)
+[Architecture and source checks](docs/architecture.md)
