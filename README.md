@@ -8,7 +8,7 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 
 ## Walkthrough
 
-A 38-second tour of a saved NVIDIA report: findings, transcript sources, concerns, forecasts and share prices.
+A continuous 35-second walkthrough of a saved NVIDIA report: search, transcript sources, concerns, forecasts and share prices.
 
 https://github.com/user-attachments/assets/36597fbc-c64c-4a07-9f75-02b8a52c7d3d
 
