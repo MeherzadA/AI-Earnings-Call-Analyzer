@@ -226,6 +226,7 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const matches = history;
   const displayedPreview = preview?.report_id === featured?.report_id ? preview : null;
   const excerpt = displayedPreview?.research?.findings?.find((finding) => finding.citations?.[0]?.quote)?.citations[0].quote;
+  if (loading && !history.length && !query) return <section className="startup-loading" role="status" aria-live="polite"><span className="spinner" aria-hidden="true"/><div><h2>Getting things ready…</h2><p>The app can take a few seconds to wake up after some time away. Hang tight — your reports will appear here automatically.</p></div></section>;
   return <div className="landing-workstation">
     <section className="earnings-strip" aria-label="Choose a call to preview its price history">
       <div className="earnings-strip-label"><strong>1-day returns</strong><span>From call-day close</span></div>
@@ -385,7 +386,7 @@ export default function App() {
           {loading && !pending && <div className="loading-state report-loading" role="status" aria-live="polite">
             {requestedPeriod && <div className="loading-call"><CompanyMark ticker={requestedPeriod.ticker} /><div><h1>{COMPANIES[requestedPeriod.ticker] || requestedPeriod.ticker}</h1><p>{requestedPeriod.ticker} · Q{requestedPeriod.quarter} FY{requestedPeriod.year}</p></div></div>}
             <div className="loading-bar"><div className="loading-fill" /></div>
-            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Fetching the call transcript…"}<span>{loading === "saved" ? "Opening an existing report. No new analysis is needed." : "You can read the transcript as soon as it arrives."}</span></p>
+            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Fetching the call transcript…"}<span>{loading === "saved" ? "The app may need a few seconds to wake up after some time away. Your saved report will open automatically." : "You can read the transcript as soon as it arrives."}</span></p>
             <div className="loading-actions"><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse reports</button></div>
           </div>}
           {pending && <div className="results pending-report">
