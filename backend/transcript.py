@@ -62,6 +62,16 @@ def company_catalog():
     return json.loads(Path(__file__).with_name("transcript_companies.json").read_text(encoding="utf-8"))["companies"]
 
 
+@lru_cache(maxsize=1)
+def company_names():
+    return {**{item["symbol"]: item["name"] for item in company_catalog()},
+            "VOXX": "VOXX International", "VARRY": "Vår Energi"}
+
+
+def company_name(ticker):
+    return company_names().get(ticker, ticker)
+
+
 def search_companies(query: str) -> list[dict]:
     """Autocomplete only companies present in the transcript archive."""
     query = query.strip().casefold()

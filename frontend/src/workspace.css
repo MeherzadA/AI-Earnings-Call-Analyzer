@@ -588,3 +588,12 @@
 @keyframes finding-arrive { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 @media (max-width:600px) { .pending-report .report-heading { flex-wrap:wrap; gap:14px; } .analysis-live-status { flex-wrap:wrap; } .analysis-live-status p { min-width:180px; } }
 @media (prefers-reduced-motion:reduce) { .pending-report .finding-card { animation:none; } }
+
+.report-search > summary { cursor:pointer; color:#243d56; font-weight:600; }
+.report-search[open] > summary { margin-bottom:16px; }
+.report-provenance { margin:0 0 18px; color:#596b81; font-size:12px; line-height:1.7; }
+.market-timing { padding:12px 20px; margin:0; background:#f5f7fa; color:#52647a; font-size:12px; line-height:1.6; }
+.source-refresh { color:#65748a; font-size:12px; line-height:1.8; }
+.source-refresh > span { display:block; }
+
+.highlight-period { display:block; color:#68798c; font-size:11px; margin:5px 0; }

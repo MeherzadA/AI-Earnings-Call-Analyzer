@@ -9,7 +9,7 @@ from queue import Queue, Empty
 from typing import Literal
 from datetime import datetime, timezone
 from time import perf_counter
-from sqlalchemy import func, text, tuple_
+from sqlalchemy import func, text, tuple_, or_, cast, String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, HTTPException, Depends, Query, Path
@@ -21,13 +21,13 @@ from database import engine, get_db, SessionLocal
 
 import models
 
-from transcript import fetch_transcript, available_calls, search_companies
+from transcript import fetch_transcript, available_calls, search_companies, company_name, company_names
 
 from analysis import analyze_transcript
 
 from prices import get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
-from context import build_context, fetch_context_sources, CONTEXT_VERSION, context_complete
+from context import build_context, fetch_context_sources, CONTEXT_VERSION, context_complete, reporting_scope
 
 # Create missing tables on startup. Existing columns still require an explicit migration.
 @asynccontextmanager
@@ -122,8 +122,10 @@ def report_response(transcript, analysis, cached=True):
     prices = json.loads(analysis.daily_prices or "[]")
     call_date = document.get("call_date") or (prices[0]["date"] if prices else None)
     ensure_past_call(call_date)
-    return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+    return {"report_id": analysis.id, "ticker": transcript.ticker, "company_name": company_name(transcript.ticker), "year": transcript.year,
             "quarter": int(transcript.quarter), "analysis": result, "research": research,
+            "highlight_periods": {item["id"]: reporting_scope(transcript.raw_text, item["citations"][0]["start"], item["citations"][0]["end"], int(transcript.quarter), transcript.year)
+                                  for item in research["financial_highlights"] if item.get("citations")},
             "call_date": call_date, "daily_prices": prices,
             "context": document.get("context") if document.get("source_hash") == source_hash(transcript.raw_text) else None,
             "return_1day": analysis.return_1day, "return_5day": analysis.return_5day, "cached": cached}
@@ -157,7 +159,7 @@ def load_prices(report_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=503, detail="The call date is unavailable; a longer price window cannot be established.")
     prices = get_stock_returns(transcript.ticker, transcript.year, int(transcript.quarter), earnings_date=current["call_date"])
     if not prices.get("daily_prices"):
-        raise HTTPException(status_code=503, detail="The price provider could not load the longer window. The stored five-day chart is still available.")
+        raise HTTPException(status_code=503, detail="Yahoo Finance did not return price history for this call. It may be a coverage gap or a temporary provider problem. Any saved prices are still available.")
     if len(prices["daily_prices"]) >= len(current["daily_prices"]):
         analysis.daily_prices = json.dumps(prices["daily_prices"])
         analysis.return_1day = prices.get("return_1day")
@@ -169,17 +171,17 @@ def load_prices(report_id: int, db: Session = Depends(get_db)):
 @app.get("/reports/{report_id}/transcript")
 def read_transcript(report_id: int, db: Session = Depends(get_db)):
     transcript, analysis = report_by_id(db, report_id)
-    return {"report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+    return {"report_id": analysis.id, "ticker": transcript.ticker, "company_name": company_name(transcript.ticker), "year": transcript.year,
             "quarter": int(transcript.quarter), "source_hash": source_hash(transcript.raw_text),
             "passages": source_passages(transcript.raw_text)}
 
 
 @app.post("/reports/{report_id}/context")
-def load_context(report_id: int, db: Session = Depends(get_db)):
+def load_context(report_id: int, db: Session = Depends(get_db), refresh_news: bool = False):
     transcript, analysis = report_by_id(db, report_id)
     report_response(transcript, analysis)  # Validate stored source and actual call date.
     document = json.loads(analysis.research_json) if analysis.research_json else {}
-    if document.get("source_hash") == source_hash(transcript.raw_text) and context_complete(document.get("context", {})):
+    if document.get("source_hash") == source_hash(transcript.raw_text) and context_complete(document.get("context", {})) and not refresh_news:
         return {"context": document["context"], "cached": True}
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
@@ -189,15 +191,24 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
         research = json.loads(analysis.research_json) if analysis.research_json else {}
         if research.get("source_hash") not in (None, source_hash(transcript.raw_text)):
             research = {}
-        if context_complete(research.get("context", {})):
+        if context_complete(research.get("context", {})) and not refresh_news:
             return {"context": research["context"], "cached": True}
+        if refresh_news:
+            checked = research.get("context", {}).get("news", {}).get("checked_at")
+            if checked:
+                try:
+                    age = (datetime.now(timezone.utc) - datetime.fromisoformat(checked)).total_seconds()
+                except (ValueError, TypeError):
+                    age = 60
+                if age < 60:
+                    raise HTTPException(status_code=429, detail="Headlines were just checked. Please wait a minute before refreshing again.")
         previous_year, previous_quarter = (transcript.year, int(transcript.quarter) - 1) if int(transcript.quarter) > 1 else (transcript.year - 1, 4)
         previous = db.query(models.Transcript).filter_by(ticker=transcript.ticker, year=previous_year, quarter=str(previous_quarter)).order_by(models.Transcript.id.desc()).first()
         prices = json.loads(analysis.daily_prices or "[]")
         call_date = research.get("call_date") or (prices[0]["date"] if prices else None)
         try:
             context = build_context(transcript.ticker, transcript.year, int(transcript.quarter), research, call_date,
-                                    {"content": previous.raw_text} if previous else None, current_text=transcript.raw_text)
+                                    {"content": previous.raw_text} if previous else None, current_text=transcript.raw_text, refresh_news=refresh_news)
         except RuntimeError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         research["context"] = context
@@ -228,7 +239,7 @@ def examples(db: Session = Depends(get_db)):
     found = {}
     for transcript, analysis in rows:
         found.setdefault((transcript.ticker, transcript.year, transcript.quarter), {
-            "report_id": analysis.id, "ticker": transcript.ticker, "year": transcript.year,
+            "report_id": analysis.id, "ticker": transcript.ticker, "company_name": company_name(transcript.ticker), "year": transcript.year,
             "quarter": int(transcript.quarter), "has_research": bool(stored_research(analysis)),
         })
     return {"examples": [found[key] for key in periods if key in found]}
@@ -422,9 +433,18 @@ def build_report(request: AnalyzeRequest, db: Session, notify=None):
 def get_history(
     sort: Literal["recent", "movers", "gains", "drops"] = "recent",
     limit: int = Query(default=10, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    q: str = Query(default="", max_length=80),
     db: Session = Depends(get_db),
 ):
     query = source_reports(db)
+    if q.strip():
+        needle = q.strip().casefold()
+        tickers = [ticker for ticker, name in company_names().items() if needle in name.casefold()]
+        searchable = (models.Transcript.ticker + " " + cast(models.Transcript.year, String)
+                      + " Q" + models.Transcript.quarter)
+        query = query.filter(or_(models.Transcript.ticker.in_(tickers), searchable.icontains(needle, autoescape=True),
+                                 models.Analysis.research_json.contains(f'"call_date": "{needle}', autoescape=True)))
     if sort != "recent":
         query = query.filter(models.Analysis.return_1day.isnot(None))
     order = {
@@ -435,7 +455,7 @@ def get_history(
     }[sort]
     total = query.count()
     results = []
-    for t, analysis in query.order_by(order, models.Transcript.id.desc()).limit(limit).all():
+    for t, analysis in query.order_by(order, models.Transcript.id.desc()).offset(offset).limit(limit).all():
         document = json.loads(analysis.research_json) if analysis.research_json else {}
         research = stored_research(analysis)
         prices = json.loads(analysis.daily_prices or "[]")
@@ -447,6 +467,8 @@ def get_history(
             "report_id": analysis.id,
             "has_research": bool(research),
             "ticker": t.ticker,
+            "company_name": company_name(t.ticker),
+            "price_points": len(prices),
             "year": t.year,
             "quarter": t.quarter,
             "call_date": document.get("call_date") or (prices[0]["date"] if prices else None),

@@ -94,6 +94,48 @@ class ContextChecks(unittest.TestCase):
                      "For Q2, we expect revenue growth and EPS between $1.20 and $1.30."):
             self.assertEqual(compare_outlook(prior_outlook(text, 2), {"amount": Decimal(62), "value": "$62"})["status"], "unscored")
 
+    def test_annual_revenue_is_not_relabelled_as_the_fourth_quarter(self):
+        text = ("Let me recap the annual financial comparisons. Loriann will then recap the quarter. "
+                "On a consolidated basis, net sales of approximately $469 million were down 12.2% year-over-year. "
+                "Moving on to the quarter. Fourth quarter comparisons. Net sales of just $108 million were down 20.8%.")
+        quote = "On a consolidated basis, net sales of approximately $469 million were down 12.2% year-over-year."
+        start = text.index(quote)
+        annual = {"label":"Consolidated net sales", "value":"approximately $469 million",
+                  "citations":[{"quote":quote, "start":start, "end":start + len(quote)}]}
+        self.assertIsNone(revenue_highlight({"financial_highlights":[annual]}, text, 4, 2024))
+        actual = transcript_revenue(text, 4, 2024)
+        self.assertEqual(actual["value"], "$108 million")
+        citation = actual["citations"][0]
+        self.assertEqual(text[citation["start"]:citation["end"]], citation["quote"])
+        self.assertIsNone(transcript_revenue(text, 3, 2024))
+        self.assertIsNone(transcript_revenue("Q4 FY2023 net sales were $108 million.", 4, 2024))
+        self.assertIsNone(transcript_revenue("Total revenue was $469 million.", 4, 2024))
+        gaming = {"label":"Gaming revenue", "value":"$4 billion", "citations":[{"quote":"This quarter, gaming revenue was $4 billion.", "start":0, "end":42}]}
+        self.assertIsNone(revenue_highlight({"financial_highlights":[gaming]}))
+        intro = "Welcome to the second quarter fiscal 2026 call. " + "Background discussion. " * 100
+        quote = "Total revenue was $46.7 billion, exceeding our outlook."
+        actual = {"label":"Total revenue", "value":"$46.7 billion", "citations":[{"quote":quote, "start":len(intro), "end":len(intro)+len(quote)}]}
+        self.assertEqual(revenue_highlight({"financial_highlights":[actual]}, intro+quote, 2, 2026)["value"], "$46.7 billion")
+        note = "We expect annual AI infrastructure investments to grow. "
+        self.assertNotEqual(context.reporting_scope(note+quote, len(note), len(note+quote), 2, 2026), "annual")
+
+
+        sources = {"previous":None, "previous_error":None, "news":{"status":"empty", "items":[]}}
+        result = context.build_context("VOXX", 2024, 4, {"financial_highlights":[annual]}, "2024-05-15", current_text=text, sources=sources)
+        self.assertEqual(result["comparison"]["reported"]["value"], "$108 million")
+
+    def test_news_uses_catalog_names_and_can_explicitly_refresh_an_empty_feed(self):
+        cached = {"call_date":"2025-05-06", "news":{"status":"empty", "items":[]}}
+        with patch("context.download", return_value=b"<rss><channel/></rss>") as download:
+            news = dated_news("LITE", "2025-05-06")
+        self.assertIn('"Lumentum Holdings"', download.call_args.kwargs["params"]["q"])
+        self.assertIn("checked_at", news)
+        with patch("context.dated_news", return_value=news) as fetch:
+            context.build_context("LITE", 2025, 3, {"context":cached}, "2025-05-06", {"content":"Hello."})
+            fetch.assert_not_called()
+            context.build_context("LITE", 2025, 3, {"context":cached}, "2025-05-06", {"content":"Hello."}, refresh_news=True)
+            fetch.assert_called_once()
+
     def test_headlines_exclude_future_dates_and_unsafe_links(self):
         xml = b'''<rss><channel><item><title>Historical headline</title><pubDate>Tue, 30 Jan 2024 12:00:00 GMT</pubDate><link>https://news.google.com/rss/articles/one</link><source>Publisher</source></item><item><title>Future headline</title><pubDate>Thu, 01 Feb 2024 12:00:00 GMT</pubDate><link>https://news.google.com/rss/articles/two</link></item><item><title>Unsafe</title><pubDate>Tue, 30 Jan 2024 12:00:00 GMT</pubDate><link>javascript:alert(1)</link></item></channel></rss>'''
         with patch("context.download", return_value=xml):
