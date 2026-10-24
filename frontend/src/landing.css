@@ -9,8 +9,10 @@
 .research-desk .brand-name em { margin-left:3px; color:#b34425; font:italic 25px/1 Georgia,serif; letter-spacing:-.6px; box-shadow:inset 0 -5px #ffe7a6; }
 .research-desk .brand-name strong { font-weight:700; }
 .research-desk .brand { gap:11px; }
-.brand-symbol { display:grid; place-items:center; flex:none; width:38px; height:38px; border:1px solid #f0d59d; border-radius:12px; background:#fff0c9; color:#bb4a29; transform:rotate(-6deg); box-shadow:2px 2px 0 #f7e3b9; }
-.brand-symbol svg { width:28px; height:28px; }
+.brand-smiley { flex:none; width:37px; height:37px; color:#27303b; }
+.brand-smiley text { font:13px Georgia,serif; }
+.research-desk .header-nav .source-link { gap:7px; }
+.github-mark { width:18px; height:18px; flex:none; }
 .research-desk .header-nav a,.research-desk .header-nav button { color:#53616f; }
 .research-desk .header-nav [aria-current="page"] { color:#b13e19; box-shadow:inset 0 -2px #ed622f; }
 .research-desk .header-nav button:hover,.research-desk .header-nav a:hover { background:#fff6e9; color:#b13e19; }
@@ -161,8 +163,7 @@
  .research-desk .header-inner { padding:12px; gap:9px; flex-wrap:wrap; }
  .research-desk .brand-name { font-size:18px; }
  .research-desk .brand-name em { font-size:21px; }
- .brand-symbol { width:32px; height:32px; border-radius:10px; }
- .brand-symbol svg { width:24px; height:24px; }
+ .brand-smiley { width:32px; height:32px; }
  .research-desk .brand { gap:9px; }
  .market-home .main { padding:18px 12px 26px; gap:17px; }
  .market-home .search-section { padding:11px 12px 9px; }
