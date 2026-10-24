@@ -27,7 +27,7 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 
 React, Vite, and Recharts on the frontend. Python, FastAPI, SQLAlchemy, and PostgreSQL on the backend. Gemini handles the analysis, DuckDB reads transcripts from defeatbeta's public dataset, and yfinance supplies historical prices.
 
-The live app runs on Vercel, Render, and Supabase.
+The live app runs on Vercel, with saved reports in Neon PostgreSQL.
 
 ## Limits
 

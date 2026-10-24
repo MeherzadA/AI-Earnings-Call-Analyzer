@@ -184,6 +184,7 @@ def load_context(report_id: int, db: Session = Depends(get_db)):
     if not generation_lock.acquire(blocking=False):
         raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
     try:
+        reserve_generation(db)
         db.refresh(analysis)
         research = json.loads(analysis.research_json) if analysis.research_json else {}
         if research.get("source_hash") not in (None, source_hash(transcript.raw_text)):
@@ -243,11 +244,19 @@ def read_example(ticker: str, db: Session = Depends(get_db)):
     return report_response(*row)
 
 
-# One backend process; multiple workers require a shared generation limit.
+# Local locks bound each process; the database reservation also covers serverless replicas.
 generation_lock = Lock()
 report_workers = ThreadPoolExecutor(max_workers=2)
 stream_worker = ThreadPoolExecutor(max_workers=1)
 stream_lock = Lock()
+
+
+def reserve_generation(db):
+    # Transaction-scoped: commit/rollback releases it, including after a worker stops.
+    if db.get_bind().dialect.name == "postgresql" and not db.execute(
+        text("SELECT pg_try_advisory_xact_lock(730062017)")
+    ).scalar():
+        raise HTTPException(status_code=429, detail="Another report or research request is running. Please try again shortly.")
 
 
 def release_generation_after(futures):
@@ -326,6 +335,7 @@ def build_report(request: AnalyzeRequest, db: Session, notify=None):
     provider_work = []
     release_deferred = False
     try:
+        reserve_generation(db)
         if existing:
             db_transcript, db_analysis = existing
             transcript = {"content": db_transcript.raw_text}

@@ -38,7 +38,7 @@ Google News RSS supplies dated headline links around the call. Article contents 
 
 ## Operational limits
 
-Generation is limited to one call at a time within the backend process to protect memory and provider quota. Multiple backend workers would need a shared generation limit. Transcript reads also share one DuckDB connection with a memory limit.
+Process locks bound local work, and a PostgreSQL transaction reservation limits generation across serverless instances to protect provider quota. Transcript reads share one DuckDB connection per instance with a memory limit.
 
 The app depends on external transcript, model, news, and price providers. Coverage and availability vary. Original report fields remain stored when a legacy report receives source-linked research.
 
