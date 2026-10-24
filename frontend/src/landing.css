@@ -18,6 +18,7 @@
 .landing-heading p { margin-top:9px; color:#62707e; font:14px/1.55 var(--font); }
 .market-home .desk-controls { display:block; min-width:0; }
 .market-home .search-section { padding:14px 17px 11px; border:1px solid #b7c4cc; border-radius:0; background:#fcfcfa; box-shadow:3px 3px 0 #dce3e8; }
+.market-home .landing-instructions { margin-bottom:12px; color:#515e68; font-size:14px; line-height:1.55; }
 .market-home .search-bar,.market-home .search-fields { gap:12px; }
 .market-home .search-field { flex:0 0 106px; }
 .market-home .ticker-field { flex:1; }
