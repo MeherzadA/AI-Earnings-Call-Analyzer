@@ -6,7 +6,11 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 
 **[Try the live app](https://earnings-analyzer-vercel2.vercel.app)**
 
-![The live homepage with saved earnings reports and NVIDIA's share price after its call](docs/images/readme-home.jpg)
+## Walkthrough
+
+A 38-second tour of a saved NVIDIA report: findings, transcript sources, concerns, forecasts and share prices.
+
+https://github.com/user-attachments/assets/36597fbc-c64c-4a07-9f75-02b8a52c7d3d
 
 ## What it does
 
@@ -15,13 +19,6 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 - Compares earlier revenue guidance with reported results when the periods and figures match, and shows related news links.
 - Lets you read the full transcript or listen with browser read-aloud. Original recordings are available for some calls.
 - Saves reports in a shared library with links you can reopen without running the AI again.
-
-<details>
-<summary>See an example report</summary>
-
-![NVIDIA's Q4 2024 report with financial highlights, findings, transcript audio and share price history](docs/images/readme-report.jpg)
-
-</details>
 
 ## Built with
 
