@@ -302,6 +302,10 @@
 .market-status,.market-explanation,.price-provider { color:#62728b; font-size:13px; line-height:1.85; }
 .market-explanation { padding:17px 20px; border-left:3px solid #b9cce7; background:#f6f8fc; }
 .market-v2 .price-provider { font-size:12px; }
+.market-listing-note { padding:12px 14px; border-left:3px solid #b8c7d6; background:#f5f7fa; color:#526581; font-size:13px; line-height:1.7; }
+.market-listing-note summary { cursor:pointer; font-weight:600; }
+.market-listing-note p { margin-top:8px; }
+.market-listing-note a { text-underline-offset:3px; }
 .daily-closes h3 { font:700 16px var(--display); margin-bottom:13px; }
 .daily-closes-scroll { max-height:270px; overflow:auto; border:1px solid #dce4ef; border-radius:6px; }
 .daily-closes table { width:100%; font-size:13px; border-collapse:collapse; }
