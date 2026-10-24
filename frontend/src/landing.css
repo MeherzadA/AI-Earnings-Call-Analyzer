@@ -3,19 +3,18 @@
  --border:#d0d7dc; --border-strong:#aab7c0; --accent:#d8491d; --green:#08795c; --critical:#bd3449;
  background:var(--bg); color:var(--ink);
 }
-.research-desk .app-header { background:#fff; border-bottom:1px solid #bbc6ce; }
-.research-desk .header-inner { max-width:1504px; padding-block:12px; }
-.research-desk .brand-name { color:#27303b; font-size:20px; letter-spacing:-.5px; }
+.research-desk .app-header { background:#fffefa; border-bottom:1px solid #d9dedf; }
+.research-desk .header-inner { max-width:1504px; padding-block:14px; }
+.research-desk .brand-name { color:#27303b; font-size:22px; letter-spacing:-.7px; }
+.research-desk .brand-name em { margin-left:3px; color:#b34425; font:italic 25px/1 Georgia,serif; letter-spacing:-.6px; box-shadow:inset 0 -5px #ffe7a6; }
 .research-desk .brand-name strong { font-weight:700; }
-.research-desk .brand { border-left:4px solid #ed622f; padding-left:10px; }
+.research-desk .brand { gap:11px; }
+.brand-symbol { display:grid; place-items:center; flex:none; width:38px; height:38px; border:1px solid #f0d59d; border-radius:12px; background:#fff0c9; color:#bb4a29; transform:rotate(-6deg); box-shadow:2px 2px 0 #f7e3b9; }
+.brand-symbol svg { width:28px; height:28px; }
 .research-desk .header-nav a,.research-desk .header-nav button { color:#53616f; }
 .research-desk .header-nav [aria-current="page"] { color:#b13e19; box-shadow:inset 0 -2px #ed622f; }
 .research-desk .header-nav button:hover,.research-desk .header-nav a:hover { background:#fff6e9; color:#b13e19; }
-.market-home .main { max-width:1504px; display:grid; grid-template-columns:225px minmax(0,1fr); align-content:start; align-items:center; gap:22px; padding:26px 24px 38px; }
-.landing-heading { padding-left:2px; }
-.landing-heading h1 { font:600 29px/1.2 var(--font); letter-spacing:-1px; white-space:nowrap; }
-.landing-heading h1 > span { color:#ed622f; }
-.landing-heading p { margin-top:9px; color:#62707e; font:14px/1.55 var(--font); }
+.market-home .main { max-width:1504px; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; align-items:center; gap:22px; padding:26px 24px 38px; }
 .market-home .desk-controls { display:block; min-width:0; }
 .market-home .search-section { padding:14px 17px 11px; border:1px solid #b7c4cc; border-radius:0; background:#fcfcfa; box-shadow:3px 3px 0 #dce3e8; }
 .market-home .landing-instructions { margin-bottom:12px; color:#515e68; font-size:14px; line-height:1.55; }
@@ -132,8 +131,7 @@
  @keyframes market-panel-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 }
 @media(max-width:1200px) {
- .market-home .main { grid-template-columns:190px minmax(0,1fr); gap:18px; }
- .landing-heading h1 { font-size:26px; }
+ .market-home .main { gap:18px; }
  .market-home .search-field { flex-basis:90px; }
  .market-home .ticker-field { flex:1; }
  .landing-board { grid-template-columns:minmax(0,1fr) minmax(420px,1fr); gap:16px; margin-top:16px; }
@@ -152,9 +150,6 @@
 }
 @media(max-width:950px) {
  .market-home .main { grid-template-columns:1fr; align-items:stretch; padding:20px 18px 30px; }
- .landing-heading > div { display:flex; align-items:center; justify-content:space-between; gap:16px; }
- .landing-heading p { margin:0; text-align:right; font-size:13px; }
- .landing-title-break { display:none; }
  .landing-board { grid-template-columns:1fr; grid-template-areas:'reports' 'chart'; }
  .landing-preview-company h2 > span { display:inline; margin-left:10px; }
  .landing-chart-heading { align-items:center; }
@@ -163,12 +158,13 @@
  .move-number { font-size:13px; }
 }
 @media(max-width:600px) {
- .research-desk .header-inner { padding:10px 12px; gap:9px; }
- .research-desk .brand-name { font-size:17px; }
- .research-desk .brand { padding-left:8px; border-left-width:3px; }
+ .research-desk .header-inner { padding:12px; gap:9px; flex-wrap:wrap; }
+ .research-desk .brand-name { font-size:18px; }
+ .research-desk .brand-name em { font-size:21px; }
+ .brand-symbol { width:32px; height:32px; border-radius:10px; }
+ .brand-symbol svg { width:24px; height:24px; }
+ .research-desk .brand { gap:9px; }
  .market-home .main { padding:18px 12px 26px; gap:17px; }
- .landing-heading h1 { font-size:25px; }
- .landing-heading p { max-width:150px; font-size:12px; line-height:1.45; }
  .market-home .search-section { padding:11px 12px 9px; }
  .market-home .search-bar { grid-template-columns:1fr .85fr 1.35fr; gap:10px; }
  .market-home .ticker-field { grid-column:1/-1; }
@@ -215,8 +211,6 @@
 @media(max-width:359px) {
  .research-desk .brand-name { font-size:15px; }
  .research-desk .header-nav { gap:9px; }
- .landing-heading h1 { font-size:22px; }
- .landing-heading p { max-width:130px; }
  .landing-sort { gap:7px; }
  .landing-sort button { font-size:10px; }
  .landing-table time,.move-number { font-size:11px; }
