@@ -14,9 +14,11 @@ The React frontend sends a ticker and fiscal period to a FastAPI service. Postgr
 
 | Location | Responsibility |
 | --- | --- |
-| `frontend/src/App.jsx` | Company search, fiscal-period selection, saved reports, and report loading. |
-| `frontend/src/ResearchReport.jsx` | Findings, source excerpts, transcript reading, and report views. |
-| `frontend/src/MarketPanel.jsx` | Historical prices and post-call returns. |
+| `frontend/src/mth/App.jsx` | App state, saved-report links, streaming analysis, and the command menu. |
+| `frontend/src/mth/Landing.jsx` | Company search, fiscal-period selection, and the saved-report library. |
+| `frontend/src/mth/Report.jsx` | Findings, source passages, the transcript, numbers, guidance, prices, and headlines. |
+| `frontend/src/mth/Listen.jsx` | Call recording playback and transcript read-aloud. |
+| `frontend/src/mth/format.js`, `frontend/src/mth/ui.jsx` | Formatting, price-line geometry, and shared components. |
 | `backend/main.py` | API routes, generation coordination, streaming, and persistence. |
 | `backend/transcript.py` | Transcript coverage, company search, and remote Parquet reads. |
 | `backend/analysis.py`, `backend/research.py` | Gemini prompt, response parsing, and source checks. |
