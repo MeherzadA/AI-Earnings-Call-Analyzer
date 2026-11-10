@@ -1,4 +1,4 @@
-// Pure presentation helpers for the interface. No DOM, no React.
+// Pure presentation helpers for the "minus the hour" interface. No DOM, no React.
 
 export const NAMES = {
   AAPL: "Apple", NVDA: "NVIDIA", PYPL: "PayPal", MSFT: "Microsoft", GOOGL: "Alphabet", GOOG: "Alphabet",
@@ -14,6 +14,7 @@ export const CATEGORIES = {
   risks: { label: "Risk", bg: "#FFE1D9", fg: "#A33A1E", ink: "#FFB4A3" },
   guidance: { label: "Guidance", bg: "#DCE8FF", fg: "#2B4C8C", ink: "#A9C8FF" },
 };
+export const RAIL_ORDER = ["performance", "opportunities", "risks", "guidance"];
 
 // Curated short names first; the API's legal names ("PayPal Holdings, Inc.") lose their suffixes.
 export const companyName = (ticker, names = {}) => (NAMES[ticker] || names[ticker] || ticker).trim()
@@ -73,8 +74,35 @@ export function parseOutlookRange(text) {
   return { low: center - delta, high: center + delta };
 }
 
+// A quote short enough to ride a line: the first sentence, cut on a word boundary.
+export function railQuote(quote, max = 96) {
+  const text = (quote || "").replace(/\s+/g, " ").trim();
+  const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] || text;
+  if (sentence.length <= max) return sentence;
+  const cut = sentence.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max * 0.6)).replace(/[,;:]$/, "")}…`;
+}
+
+// One quote per category, in the signature order, from findings that carry citations.
+export function railQuotes(findings = []) {
+  const quotes = [];
+  for (const category of RAIL_ORDER) {
+    const finding = findings.find((item) => item.category === category && item.citations?.[0]?.quote);
+    if (finding) quotes.push({ category, label: CATEGORIES[category].label.toUpperCase(), quote: railQuote(finding.citations[0].quote), findingId: finding.id });
+  }
+  if (!quotes.length) return [];
+  // Top up to four with further findings so a thin report still has words on its line.
+  for (const finding of findings) {
+    if (quotes.length >= 4) break;
+    if (finding.citations?.[0]?.quote && !quotes.some((item) => item.findingId === finding.id)) {
+      quotes.push({ category: finding.category, label: CATEGORIES[finding.category]?.label.toUpperCase() || "NOTE", quote: railQuote(finding.citations[0].quote), findingId: finding.id });
+    }
+  }
+  return quotes;
+}
+
 // Smooth price line: a monotone cubic, flat at each high and low as in the design, but without
-// a flat step at every close.
+// a flat step at every close, so text riding the line doesn't bunch up at each day.
 export function priceGeometry(prices, { left, right, top, bottom }) {
   const values = prices.map((item) => item.price).filter(Number.isFinite);
   if (values.length < 2) return null;
@@ -95,6 +123,25 @@ export function priceGeometry(prices, { left, right, top, bottom }) {
     path += ` C${+(a.x + third).toFixed(1)} ${+(a.y + tangents[i - 1] * third).toFixed(1)} ${+(b.x - third).toFixed(1)} ${+(b.y - tangents[i] * third).toFixed(1)} ${b.x} ${b.y}`;
   }
   return { points, path, high, low, y, area: (floor) => `${path} L${points.at(-1).x} ${floor} L${points[0].x} ${floor} Z` };
+}
+
+// Which closes get a price label: call day, +1, +5, the low, the high, and the last.
+export function markedSessions(prices) {
+  const marks = new Map();
+  if (!prices.length) return marks;
+  const values = prices.map((item) => item.price);
+  const last = prices.length - 1;
+  marks.set(0, "CALL DAY");
+  if (last >= 1) marks.set(1, "+1 DAY");
+  if (last >= 5) marks.set(5, "+5 DAYS");
+  if (last > 6) {
+    const low = values.indexOf(Math.min(...values.slice(1)));
+    const high = values.indexOf(Math.max(...values.slice(1)));
+    if (!marks.has(low)) marks.set(low, "LOW");
+    if (!marks.has(high)) marks.set(high, "HIGH");
+  }
+  if (!marks.has(last)) marks.set(last, `+${last}`);
+  return marks;
 }
 
 export function returnAt(report, prices, session) {

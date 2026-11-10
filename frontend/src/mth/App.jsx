@@ -15,7 +15,7 @@ function ReportSkeleton({ onHome, onCommand }) {
     <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <section className="m-rhero" role="status" aria-label="Opening the report">
       <Skeleton width={180} height={12} className="m-skel-dark" />
-      <p className="m-wake" aria-live="polite">{slow ? "Starting the service. The saved report will open when it’s ready." : ""}</p>
+      <p className="m-wake" aria-live="polite">{slow ? <><span className="m-wake-dot" aria-hidden="true" />Waking the app up. The saved report will open on its own in a few seconds.</> : ""}</p>
       <div className="m-rhero-top"><Skeleton width={76} height={76} radius={20} className="m-skel-dark" /><div className="m-rhero-title"><Skeleton width={340} height={52} className="m-skel-dark" /><Skeleton width={260} height={14} className="m-skel-dark" /></div></div>
       <div className="m-rhero-grid"><div><Skeleton width={160} height={12} className="m-skel-dark" /><Skeleton height={44} className="m-skel-dark" style={{ marginTop: 14 }} /><Skeleton height={44} width="70%" className="m-skel-dark" style={{ marginTop: 10 }} /></div><div className="m-after is-skeleton"><Skeleton height={14} width="50%" /><Skeleton height={80} radius={12} /><Skeleton height={56} radius={14} /></div></div>
     </section>
@@ -153,7 +153,7 @@ function Shell() {
 
   useEffect(() => {
     const subject = view.report || view.period;
-    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · Earnings Analyzer` : "Earnings Analyzer";
+    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · minus the hour` : "Earnings calls, minus the hour";
     if (view.kind === "report" || view.kind === "analyzing") document.getElementById("report-title")?.focus({ preventScroll: true });
   }, [view.kind, view.report?.report_id, view.period?.ticker]);
 
