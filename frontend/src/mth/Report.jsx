@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { companyName, highlightPeriod, markRange, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
+import { companyName, highlightPeriod, markRange, money, moveTone, newsTitle, periodLabel, promiseChart, railQuotes, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
 import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
 import { AppBar } from "./Landing.jsx";
 import { ListenDock, PlayIcon, useListen } from "./Listen.jsx";
@@ -308,6 +308,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
   const comparison = report.context?.comparison;
   const news = report.context?.news;
   const checks = research.checks;
+  const quotes = railQuotes(findings);
   const fiscalNote = report.call_date && Number(report.call_date.slice(0, 4)) !== Number(report.year);
 
   return <div className="m-report">
@@ -358,7 +359,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
     <section className="m-findings" id="findings" aria-labelledby="findings-title">
       <div className="m-findings-list">
         <p className="m-eyebrow m-eyebrow-green">What mattered</p>
-        <h2 className="m-h2-r" id="findings-title">{findings.length === 1 ? "One finding" : `${["Zero", "One", "Two", "Three", "Four", "Five", "Six"][findings.length] || findings.length} findings`}</h2>
+        <h2 className="m-h2-r" id="findings-title">{findings.length === 1 ? "One finding" : `${["Zero", "One", "Two", "Three", "Four", "Five", "Six"][findings.length] || findings.length} findings`}, each with its line.</h2>
         {findings.map((item, index) => <FindingCard key={item.id} finding={item} selected={index === selected} cardRef={(node) => { cards.current[index] = node; }}
           onSelect={() => narrow ? openCite(index, 0, item.citations[0]) : select(index)} onCite={(c, i) => openCite(index, i, c)} style={{ "--i": index }} />)}
         {!findings.some((item) => item.category === "risks") && <p className="m-muted">No risk finding was kept. That doesn’t mean the call had none; this isn’t a complete risk assessment.</p>}
@@ -408,13 +409,13 @@ export default function Report({ report: initial, history, names, onOpen, onHome
     </section>
 
     <section className="m-stock" id="stock" ref={stockRef} aria-labelledby="stock-title">
-      <p className="m-eyebrow m-eyebrow-green">Stock price after the call</p>
+      <p className="m-eyebrow m-eyebrow-green">What the stock heard</p>
       <div className="m-stock-head">
         <h2 className="m-h2-r" id="stock-title">{prices.length > 1 ? `${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"} after the call.` : "Prices after the call."}</h2>
         <span className="m-muted">Shown side by side, not as cause and effect.</span>
       </div>
       <div className="m-stock-card">
-        {prices.length > 1 ? <QuoteRail prices={prices} height={narrow ? 300 : 420} label={`${report.ticker} closing share price for ${prices.length - 1} trading days after the ${periodLabel(report)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}`} />
+        {prices.length > 1 ? <QuoteRail prices={prices} quotes={quotes} height={narrow ? 300 : 420} label={`${report.ticker} closes for ${prices.length - 1} trading days after the ${periodLabel(report)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}. Drawn with lines management said on the call.`} />
           : <p className="m-stock-empty">Closing prices aren’t available for this call. The transcript and findings still are.</p>}
         {priceState === "loading" && <p className="m-stock-status m-mono" role="status">Pulling up to 21 trading days…</p>}
         <div className="m-stock-tiles">

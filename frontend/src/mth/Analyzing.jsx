@@ -60,7 +60,7 @@ export default function Analyzing({ period, pending, error, elapsed, names, onHo
     <section className="m-findings" aria-labelledby="stream-title">
       <div className="m-findings-list">
         <p className="m-eyebrow m-eyebrow-green">What mattered</p>
-        <h2 className="m-h2-r" id="stream-title">{findings.length ? `${findings.length} ${findings.length === 1 ? "finding" : "findings"} found` : "Checking the transcript for findings."}</h2>
+        <h2 className="m-h2-r" id="stream-title">{findings.length ? `${findings.length} ${findings.length === 1 ? "finding" : "findings"} so far, each with its line.` : "Findings land here as they’re checked."}</h2>
         <div aria-live="polite" className="m-stream">
           {findings.map((item, index) => <FindingCard key={item.id || index} finding={{ ...item, id: item.id || `F${index + 1}` }} selected={index === selected} style={{ "--i": 0 }}
             onSelect={() => { if (narrow) setSheet(item.citations[0]); else { setSelected(index); setOffset(0); } }} onCite={(citation) => { setSelected(index); setOffset(0); if (narrow) setSheet(citation); }} />)}
