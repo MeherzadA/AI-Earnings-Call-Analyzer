@@ -42,7 +42,7 @@ export default function CommandMenu({ history, names, onNames, onOpen, onAnalyze
     const filtered = (periods || []).filter((item) => !needle || periodLabel(item).toLowerCase().includes(needle.toLowerCase()) || String(item.year).includes(needle));
     items = filtered.slice(0, 12).map((item) => {
       const saved = ready.find((report) => samePeriod(report, item));
-      return { key: `${item.year}-${item.quarter}`, ticker: item.ticker, title: `${companyName(item.ticker, names)} ${periodLabel(item)}`, meta: item.call_date ? `Call on ${shortDate(item.call_date)}` : "", badge: saved ? "Ready" : "~40s", run: () => saved ? onOpen(saved) : onAnalyze({ ticker: item.ticker, year: Number(item.year), quarter: Number(item.quarter) }) };
+      return { key: `${item.year}-${item.quarter}`, ticker: item.ticker, title: `${companyName(item.ticker, names)} ${periodLabel(item)}`, meta: item.call_date ? `Call on ${shortDate(item.call_date)}` : "", badge: saved ? "Ready" : "Analyze", run: () => saved ? onOpen(saved) : onAnalyze({ ticker: item.ticker, year: Number(item.year), quarter: Number(item.quarter) }) };
     });
   } else {
     const library = filterLibrary(ready, "all", needle, names).slice(0, needle ? 6 : 8).map((item) => ({ key: `r${item.report_id}`, ticker: item.ticker, title: `${companyName(item.ticker, names)} ${periodLabel(item)}`, meta: shortDate(item.call_date), badge: "Ready", run: () => onOpen(item), group: "In the library" }));
