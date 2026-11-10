@@ -1,22 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { CATEGORIES, LOGOS, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, railQuotes, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
+import { LOGOS, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
 import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, modKey } from "./ui.jsx";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function AppBar({ variant = "landing", onHome, onCommand, onLibrary, onHowItWorks }) {
+export function AppBar({ variant = "landing", onHome, onCommand, onLibrary }) {
   const mod = modKey();
   return <header className={`m-bar m-bar-${variant}`}>
-    <a className="m-brand" href="?" onClick={(event) => { event.preventDefault(); onHome(); }}><span className="m-brand-mark" aria-hidden="true">¶</span>minus the hour</a>
-    {variant === "report" && <button type="button" className="m-bar-search" onClick={onCommand}>
+    <a className="m-brand" href="?" onClick={(event) => { event.preventDefault(); onHome(); }}>Earnings Analyzer</a>
+    {variant === "report" && <button type="button" className="m-bar-search" onClick={onCommand} aria-label="Search another company or quarter">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-4-4" /></svg>
       <span>Search another company or quarter</span><Kbd dark label={`${mod} K`}>{mod === "⌘" ? "⌘K" : "Ctrl K"}</Kbd>
     </button>}
     <nav className="m-bar-nav" aria-label="Main">
       <button type="button" onClick={onLibrary}>Library</button>
-      {variant === "landing" && <button type="button" onClick={onHowItWorks}>How it works</button>}
-      <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer" className={variant === "landing" ? "is-filled" : ""}>GitHub</a>
     </nav>
   </header>;
 }
@@ -93,6 +91,7 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
     if (event.key === "Escape") setQuery("");
   }
   const selected = suggestions[Math.min(active, suggestions.length - 1)];
+  const selectedIsReady = selected && (!symbol || Boolean(readyReport(selected)));
   const hint = status === "searching" || (company && !periods) ? "Checking which calls exist…" : status === "none" ? `No transcripts match “${symbol}”. Try a ticker like NVDA.` : status === "error" ? "Coverage couldn’t be checked. Try again in a moment." : symbol && periods && !periods.length ? `No past calls found for ${company.symbol}.` : null;
 
   return <form className="m-search" role="search" onSubmit={(event) => { event.preventDefault(); choose(selected); }}>
@@ -101,7 +100,7 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
       <span className="sr-only">Company or ticker</span>
       <input ref={input} value={query} onChange={(event) => { setQuery(event.target.value); setActive(0); }} onKeyDown={onKeyDown} placeholder="Type a company — NVIDIA, AAPL…" autoComplete="off" spellCheck={false} maxLength={80}
         role="combobox" aria-expanded={suggestions.length > 0} aria-controls="m-search-calls" aria-activedescendant={selected ? `m-call-${suggestions.indexOf(selected)}` : undefined} aria-describedby="m-search-hint" />
-      <button type="submit" className="m-search-go" disabled={!selected}>Read the call <span aria-hidden="true">⏎</span></button>
+      <button type="submit" className="m-search-go" disabled={!selected}>{selectedIsReady ? "Open report" : "Analyze call"}<span aria-hidden="true">↵</span></button>
     </label>
     <div className="m-search-row">
       {symbol && company ? <CompanyLogo ticker={company.symbol} size={28} radius={8} /> : <span className="m-search-row-label">{history.length ? "Ready now" : ""}</span>}
@@ -113,7 +112,7 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
             onMouseEnter={() => setActive(index)} onClick={() => choose(item)} title={item.call_date ? `Call on ${shortDate(item.call_date)}` : undefined}>
             {!symbol && <CompanyLogo ticker={item.ticker} size={20} radius={6} />}
             {!symbol ? `${companyName(item.ticker, names)} ${periodLabel(item)}` : periodLabel(item)}
-            <span className={`m-qchip-state ${ready ? "is-ready" : ""}`}>● {ready ? "Ready" : "~40s"}</span>
+            <span className={`m-qchip-state ${ready ? "is-ready" : ""}`}>{ready ? "Ready" : "Analyze"}</span>
           </button>;
         })}
       </div>
@@ -124,50 +123,6 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
       {symbol && companies.length > 1 && <span className="m-search-alts">Not it?{companies.slice(0, 5).filter((item) => item.symbol !== company?.symbol).slice(0, 4).map((item) => <button type="button" key={item.symbol} onClick={() => setCompany(item)}><b>{item.symbol}</b> {item.name}</button>)}</span>}
     </div>}
   </form>;
-}
-
-function Floaters({ report, onOpen }) {
-  if (!report) return <div className="m-floaters" aria-hidden="true">
-    <div className="m-obj m-obj-1"><Skeleton width="40%" height={12} /><Skeleton height={18} style={{ marginTop: 10 }} /><Skeleton height={44} style={{ marginTop: 12 }} radius={12} /></div>
-    <div className="m-obj m-obj-2"><Skeleton width={54} height={54} radius={14} /><Skeleton width={140} height={18} /></div>
-  </div>;
-  const findings = report.research.findings;
-  const guidance = findings.find((item) => item.category === "guidance") || findings[0];
-  const metric = report.research.financial_highlights[0];
-  const prices = report.daily_prices || [];
-  const fifth = returnAt(report, prices, 5);
-  return <div className="m-floaters">
-    <button type="button" className="m-obj m-obj-1" onClick={onOpen} aria-label={`Open ${report.ticker} ${periodLabel(report)}: ${guidance.headline}`}>
-      <span className="m-eyebrow" style={{ color: CATEGORIES[guidance.category]?.fg }}>{CATEGORIES[guidance.category]?.label}</span>
-      <span className="m-obj-head">{guidance.headline}</span>
-      <span className="m-obj-quote"><mark>“{guidance.citations[0].quote.length > 110 ? `${guidance.citations[0].quote.slice(0, 108).replace(/\s+\S*$/, "")}…` : guidance.citations[0].quote}”</mark></span>
-    </button>
-    <button type="button" className="m-obj m-obj-2" onClick={onOpen} aria-label={`Open ${companyName(report.ticker)} ${periodLabel(report)}`}>
-      <CompanyLogo ticker={report.ticker} size={54} radius={14} />
-      <span className="m-obj-stack"><b>{companyName(report.ticker)} · {periodLabel(report)}</b><span>{findings.length} findings · tone {report.research.management_tone}</span></span>
-    </button>
-    {metric && <button type="button" className="m-obj m-obj-3" onClick={onOpen} aria-label={`${metric.label}: ${metric.value}`}>
-      <span className="m-eyebrow">{metric.label.length > 18 ? metric.label.split(" ").slice(0, 2).join(" ") : metric.label}</span>
-      <span className="m-obj-num">{parseMoney(metric.value) ? money(parseMoney(metric.value)) : metric.value.split(" ")[0]}</span>
-    </button>}
-    {fifth != null && <button type="button" className="m-obj m-obj-4" onClick={onOpen} aria-label={`5 days after: ${signedPct(fifth)}`}>
-      <span className="m-eyebrow">5 days after</span><b className={`m-num m-move-${moveTone(fifth)}`}>{signedPct(fifth)}</b>
-    </button>}
-  </div>;
-}
-
-function Marquee({ history, names, onOpen }) {
-  const items = history.filter((item) => item.has_research);
-  if (!items.length) return <div className="m-marquee" aria-hidden="true"><div className="m-marq-track is-static">{[0, 1, 2, 3, 4, 5].map((i) => <Skeleton key={i} width={180} height={28} radius={8} style={{ opacity: 0.25 }} />)}</div></div>;
-  const loop = [];
-  while (loop.length < 10) loop.push(...items);
-  return <nav className="m-marquee" aria-label="Calls in the library">
-    <div className="m-marq-track">
-      {[...loop, ...loop].map((item, index) => <a key={index} href={`?report=${item.report_id}`} tabIndex={index < loop.length && index < items.length ? 0 : -1} aria-hidden={index >= items.length || undefined} onClick={(event) => { event.preventDefault(); onOpen(item); }}>
-        <CompanyLogo ticker={item.ticker} size={28} radius={8} />{companyName(item.ticker, names)} {periodLabel(item)} <span className={`m-mono m-move-${moveTone(item.return_1day)}-ink`}>{signedPct(item.return_1day)}</span>
-      </a>)}
-    </div>
-  </nav>;
 }
 
 function Preview({ report, history, names, onPick, onOpen }) {
@@ -249,7 +204,7 @@ function Library({ history, total, state, names, onOpen, onRetry, libraryRef }) 
   const visible = filterLibrary(items, filter, query, names);
   return <section className="m-library" ref={libraryRef} id="library" aria-labelledby="library-title">
     <div className="m-section-head">
-      <div><p className="m-eyebrow m-eyebrow-mint">The library</p><h2 className="m-h2" id="library-title">Pick one up.</h2></div>
+      <div><p className="m-eyebrow m-eyebrow-mint">The library</p><h2 className="m-h2" id="library-title">Saved reports</h2></div>
       <div className="m-lib-tools">
         <label className="m-lib-filter"><span className="sr-only">Filter the library</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter" /></label>
         <div className="m-chips" role="group" aria-label="Filter by next-day move">
@@ -274,13 +229,8 @@ function Library({ history, total, state, names, onOpen, onRetry, libraryRef }) 
 export default function Landing({ history, total, historyState, names, onNames, onOpen, onAnalyze, onCommand, onRetry }) {
   const [featured, setFeaturedId] = useFeatured(history);
   const libraryRef = useRef(null);
-  const howRef = useRef(null);
-  const mod = modKey();
   const prices = (featured?.daily_prices || []).slice(0, 7);
-  const quotes = featured ? railQuotes(featured.research.findings) : [];
-  const ready = history.filter((item) => item.has_research);
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-  const openFeatured = (passage) => featured && onOpen(featured, passage);
   // The API sleeps between visits; say so if the library is slow instead of leaving a blank stage.
   const [slow, setSlow] = useState(false);
   useEffect(() => {
@@ -290,56 +240,23 @@ export default function Landing({ history, total, historyState, names, onNames, 
   }, [historyState]);
   return <div className="m-landing">
     <section className="m-hero">
-      <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={() => scrollTo(libraryRef)} onHowItWorks={() => scrollTo(howRef)} />
-      <Floaters report={featured} onOpen={() => openFeatured()} />
+      <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={() => scrollTo(libraryRef)} />
       <div className="m-hero-center">
-        <h1 className="m-hero-title">Earnings calls,<br /><span>minus the hour.</span></h1>
-        <p className="m-hero-sub">Type a company. Get what was said on its call, the stock’s reaction, and the exact line behind every claim.</p>
+        <h1 className="m-hero-title">Analyze an earnings call</h1>
+        <p className="m-hero-sub">Search by company or ticker, then choose a quarter.</p>
         <SearchBox history={history} names={names} onOpen={onOpen} onAnalyze={onAnalyze} onNames={onNames} />
-        <p className="m-wake" role="status" aria-live="polite">{slow ? <><span className="m-wake-dot" aria-hidden="true" />Waking the app up. After some time away this takes a few seconds; your reports will appear on their own.</> : ""}</p>
+        <p className="m-wake" role="status" aria-live="polite">{slow ? "Starting the service. Reports will load when it’s ready." : ""}</p>
       </div>
-      <div className="m-hero-rail">
-        <p className="m-rail-caption"><span aria-hidden="true" />{featured ? `${featured.ticker} after its ${periodLabel(featured)} call — written in the call’s own words` : "Loading a call from the library…"}</p>
-        <QuoteRail prices={prices} quotes={quotes} height={300} label={featured && prices.length > 1 ? `${companyName(featured.ticker)} closing price for ${prices.length - 1} trading days after its ${periodLabel(featured)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}, drawn with lines management said on the call` : "Price chart loading"} />
-      </div>
-      <Marquee history={history} names={names} onOpen={onOpen} />
+      {prices.length > 1 && <div className="m-hero-rail"><QuoteRail prices={prices} height={230} label={`${companyName(featured.ticker)} closing share price for ${prices.length - 1} trading days after its ${periodLabel(featured)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}`} /></div>}
     </section>
 
-    <section className="m-what" ref={howRef} aria-labelledby="what-title">
+    <section className="m-what" aria-labelledby="what-title">
       <div className="m-section-head">
-        <div><p className="m-eyebrow m-eyebrow-green">What comes back</p><h2 className="m-h2" id="what-title">One call, on one page.</h2></div>
-        <p className="m-section-lede">The numbers, the lines that mattered, how the stock moved, and the exact passage behind every claim.</p>
+        <div><p className="m-eyebrow m-eyebrow-green">Report preview</p><h2 className="m-h2" id="what-title">What a report includes</h2></div>
+        <p className="m-section-lede">Key findings, reported figures, transcript passages, and the stock’s movement after the call.</p>
       </div>
       <div className="m-what-stage">
         <Preview report={featured} history={history} names={names} onPick={setFeaturedId} onOpen={onOpen} />
-        <span className="m-note m-note-1"><i>1</i>Every claim links<br />to its exact line</span>
-        <span className="m-note m-note-2"><i>2</i>↑ How the stock moved after</span>
-        <span className="m-note m-note-3"><i>3</i>↑ Tone, labelled honestly</span>
-      </div>
-    </section>
-
-    <section className="m-instant" aria-labelledby="instant-title">
-      <p className="m-eyebrow m-eyebrow-mint">Built to feel instant</p>
-      <h2 className="m-h2" id="instant-title">No spinner theatre.</h2>
-      <div className="m-feats">
-        <div className="m-feat">
-          <b>Already read? Opens now.</b>
-          <span className="m-feat-list">{(ready.length ? ready.slice(0, 2) : [null, null]).map((item, i) => item ? <button type="button" key={item.report_id} className="m-feat-row" onClick={() => onOpen(item)}><CompanyLogo ticker={item.ticker} size={28} radius={8} />{companyName(item.ticker, names)} {periodLabel(item)}<span className="m-ready">Ready</span></button> : <Skeleton key={i} height={44} radius={12} />)}</span>
-          <span className="m-feat-note">{ready.length} {ready.length === 1 ? "call" : "calls"} in the library load with no wait.</span>
-        </div>
-        <div className="m-feat">
-          <b>New call? About 40 seconds.</b>
-          <span className="m-feat-steps"><span>✓ Found the transcript</span><span className="is-strong">Reading the passages…</span><span className="m-bar-load"><span /></span><span className="is-muted">Checking every quote · Pulling prices</span></span>
-          <span className="m-feat-note">Findings show up as they’re ready. The finished report is saved to the library.</span>
-        </div>
-        <div className="m-feat">
-          <b>Keyboard first.</b>
-          <button type="button" className="m-feat-cmd" onClick={onCommand}>
-            <span className="m-feat-cmd-q">⌕ <b>{ready[0] ? ready[0].ticker.toLowerCase() : "appl"}</b><Kbd>esc</Kbd></span>
-            {(ready.length ? ready.slice(0, 2) : []).map((item, i) => <span key={item.report_id} className={`m-feat-cmd-row ${i === 0 ? "is-on" : ""}`}><CompanyLogo ticker={item.ticker} size={24} radius={6} />{companyName(item.ticker, names)} {periodLabel(item)}{i === 0 && <Kbd>↵</Kbd>}</span>)}
-          </button>
-          <span className="m-feat-note"><Kbd>{mod === "⌘" ? "⌘K" : "Ctrl K"}</Kbd> anywhere · <Kbd>J</Kbd> <Kbd>K</Kbd> between findings</span>
-        </div>
       </div>
     </section>
 
@@ -350,7 +267,7 @@ export default function Landing({ history, total, historyState, names, onNames, 
 
 export function SiteFooter() {
   return <footer className="m-footer">
-    <div><span className="m-footer-brand">¶ minus the hour</span><span className="m-mono m-footer-src">TRANSCRIPTS: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">DEFEATBETA</a> · ANALYSIS: GEMINI · PRICES: YAHOO FINANCE</span></div>
+    <div><span className="m-footer-brand">Earnings Analyzer</span><span className="m-mono m-footer-src">Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">DefeatBeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span></div>
     <p>Tone is the model’s read, not a fact. Not investment advice.<br />Built by <a href="https://meherzad.tech" target="_blank" rel="noreferrer">Meherzad Antia</a> · <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub</a></p>
   </footer>;
 }
