@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { companyName, highlightPeriod, markRange, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
-import { CategoryChip, CompanyLogo, Kbd, PublisherIcon, QuoteRail, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
-import { AppBar } from "./Landing.jsx";
+import { companyName, highlightPeriod, markRange, modelLabel, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
+import { CategoryChip, CompanyLogo, Kbd, PriceChart, PublisherIcon, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
+import { AppBar, SiteFooter } from "./Landing.jsx";
 
 export function useNarrow(query = "(max-width: 999px)") {
   const [narrow, setNarrow] = useState(() => window.matchMedia(query).matches);
@@ -177,6 +177,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
   const [sheet, setSheet] = useState(null);
   const [drawer, setDrawer] = useState(initialPassage ? { focus: initialPassage } : null);
   const [section, setSection] = useState("findings");
+  const [day, setDay] = useState(null);
   const cards = useRef([]);
   const stockRef = useRef(null);
   const research = report.research;
@@ -380,23 +381,27 @@ export default function Report({ report: initial, history, names, onOpen, onHome
     </section>
 
     <section className="m-stock" id="stock" ref={stockRef} aria-labelledby="stock-title">
-      <p className="m-eyebrow m-eyebrow-green">Stock price after the call</p>
       <div className="m-stock-head">
-        <h2 className="m-h2-r" id="stock-title">{prices.length > 1 ? `${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"} after the call.` : "Prices after the call."}</h2>
-        <span className="m-muted">Shown side by side, not as cause and effect.</span>
+        <h2 className="m-h2-r" id="stock-title">Stock price after the call</h2>
+        <span className="m-muted">{prices.length > 1 ? `Daily closes for ${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"}. ` : ""}Shown next to the call, not as cause and effect.</span>
       </div>
       <div className="m-stock-card">
-        {prices.length > 1 ? <QuoteRail prices={prices} height={narrow ? 300 : 420} label={`${report.ticker} closing prices for ${prices.length - 1} trading days after the ${periodLabel(report)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}.`} />
+        {priceState === "loading" && <p className="m-stock-status" role="status">Loading more trading days…</p>}
+        {prices.length > 1 ? <PriceChart prices={prices} active={day} onActive={setDay} marks={[1, 5, 21]} height={narrow ? 280 : 380}
+          title={`${report.ticker} closing prices for ${prices.length - 1} trading days after the ${periodLabel(report)} call`} />
           : <p className="m-stock-empty">Closing prices aren’t available for this call. The transcript and findings still are.</p>}
-        {priceState === "loading" && <p className="m-stock-status m-mono" role="status">Pulling up to 21 trading days…</p>}
-        <div className="m-stock-tiles">
-          {[["Call day", null], ["Next day", 1], ["5 days", 5], ["21 days", 21]].map(([label, session]) => {
+        <div className="m-stock-tiles" role="group" aria-label="Price at set points after the call">
+          {[["Call-day close", 0], ["Next day", 1], ["After 5 days", 5], ["After 21 days", 21]].map(([label, session]) => {
             const value = session ? returnAt(report, prices, session) : null;
-            const missing = session && prices.length <= session && value == null;
-            return <span key={label} className={session === 5 ? "is-key" : ""}><small className="m-eyebrow">{label}</small><b className={`m-mono ${session ? `m-move-${moveTone(value)}-ink` : ""}`}>{session ? (missing ? "—" : signedPct(value)) : prices[0] ? `$${prices[0].price.toFixed(2)}` : "—"}</b></span>;
+            const available = prices.length > session;
+            const text = session ? (value == null ? "—" : signedPct(value)) : prices[0] ? `$${prices[0].price.toFixed(2)}` : "—";
+            return <button type="button" key={label} disabled={!available} aria-pressed={(day ?? prices.length - 1) === session}
+              onClick={() => setDay(session)} onMouseEnter={() => available && setDay(session)}>
+              <small>{label}</small><b className={session ? `m-move-${moveTone(value)}-ink` : ""}>{text}</b>
+            </button>;
           })}
         </div>
-        <p className="m-stock-foot">Regular-session daily closes from Yahoo Finance. After-hours and intraday moves aren’t shown.</p>
+        <p className="m-stock-foot">Regular-session closes from Yahoo Finance. After-hours and intraday moves aren’t shown.</p>
       </div>
     </section>
 
@@ -413,10 +418,19 @@ export default function Report({ report: initial, history, names, onOpen, onHome
       </div>
     </section>
 
-    <footer className="m-receipt">
-      <span className="m-mono">READ BY {research.model || "—"} · PROMPT {research.prompt_version || "—"} · {research.generated_at ? shortDate(research.generated_at).toUpperCase() : "—"} · TRANSCRIPT {receiptHash(research.source_hash)}</span>
-      <span>Tone is the model’s read, not a fact. Not investment advice.</span>
-    </footer>
+    <section className="m-method" aria-labelledby="method-title">
+      <h2 id="method-title">How this report was made</h2>
+      <p>{modelLabel(research.model)} read the call transcript{research.generated_at ? ` on ${shortDate(research.generated_at)}` : ""} and wrote the findings. Every quote and number was then matched word for word against the transcript. Tone is the model’s reading, not a fact.</p>
+      <details>
+        <summary>Technical details</summary>
+        <dl>
+          <dt>Model</dt><dd>{research.model || "Not recorded"}</dd>
+          <dt>Prompt version</dt><dd>{research.prompt_version || "Not recorded"}</dd>
+          <dt>Transcript fingerprint</dt><dd>{receiptHash(research.source_hash)}</dd>
+        </dl>
+      </details>
+    </section>
+    <SiteFooter />
 
     {sheet && <Modal className="m-sheet" label="Source passage" onClose={() => setSheet(null)}>
       <button type="button" className="m-close m-sheet-close m-hit" onClick={() => setSheet(null)} aria-label="Close source">×</button>

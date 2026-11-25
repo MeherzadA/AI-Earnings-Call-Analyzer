@@ -197,6 +197,41 @@ function niceStep(raw) {
   return [1, 2, 2.5, 5, 10].map((n) => n * power).find((n) => n >= raw) || 10 * power;
 }
 
+// Price chart scales: y ticks on round numbers covering every close, x by trading day.
+export function priceScale(prices, { left, right, top, bottom }, tickCount = 4) {
+  const values = prices.map((item) => item.price).filter(Number.isFinite);
+  if (values.length < 2 || values.length !== prices.length) return null;
+  const low = Math.min(...values), high = Math.max(...values);
+  const pad = (high - low || high * 0.02 || 1) * 0.12;
+  const step = niceStep((high - low + pad * 2) / tickCount);
+  const min = Math.floor((low - pad) / step) * step, max = Math.ceil((high + pad) / step) * step;
+  const ticks = [];
+  for (let value = min; value <= max + step / 2; value += step) ticks.push(+value.toFixed(6));
+  const x = (index) => left + index * (right - left) / (prices.length - 1);
+  const y = (price) => top + (max - price) / (max - min) * (bottom - top);
+  const points = prices.map((item, index) => ({ ...item, index, x: x(index), y: y(item.price) }));
+  const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  return { points, path, ticks, x, y, min, max };
+}
+
+// Indices to label on the date axis: the call day, the last day, and evenly spaced days between.
+export function dateTicks(count, slots = 5) {
+  if (count < 2) return [0];
+  const want = Math.min(slots, count);
+  return [...new Set(Array.from({ length: want }, (_, i) => Math.round(i * (count - 1) / (want - 1))))];
+}
+
+export function priceLabel(value) {
+  if (!Number.isFinite(value)) return "—";
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash-Lite"
+export function modelLabel(model) {
+  if (!model) return "an AI model";
+  return model.replace(/^gemini-/i, "Gemini ").replace(/-flash-lite$/i, " Flash-Lite").replace(/-flash$/i, " Flash").replace(/-pro$/i, " Pro");
+}
+
 export function newsTitle(item) {
   const suffix = ` - ${item.source}`;
   return item.title?.endsWith(suffix) ? item.title.slice(0, -suffix.length) : item.title;

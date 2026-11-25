@@ -311,6 +311,6 @@ export default function Landing({ history, total, historyState, names, onNames, 
 export function SiteFooter() {
   return <footer className="m-footer">
     <div><span className="m-footer-brand">Earnings Analyzer</span><span className="m-mono m-footer-src">Transcripts: <a href="https://huggingface.co/datasets/defeatbeta/yahoo-finance-data" target="_blank" rel="noreferrer">DefeatBeta</a> · Analysis: Gemini · Prices: Yahoo Finance</span></div>
-    <p>Tone is the model’s read, not a fact. Not investment advice.<br />Built by <a href="https://meherzad.tech" target="_blank" rel="noreferrer">Meherzad Antia</a> · <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub</a></p>
+    <p>For research only, not investment advice.<br />Built by <a href="https://meherzad.tech" target="_blank" rel="noreferrer">Meherzad Antia</a> · <a href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub</a></p>
   </footer>;
 }
