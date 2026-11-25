@@ -20,6 +20,15 @@ class TranscriptCoverageChecks(unittest.TestCase):
         self.assertEqual(transcript.search_companies("   "), [])
         self.assertLessEqual(len(transcript.search_companies("a")), 8)
 
+    def test_search_finds_brands_typos_and_one_row_per_company(self):
+        first = lambda query: transcript.search_companies(query)[0]["symbol"]
+        self.assertEqual(first("google"), "GOOG")
+        self.assertEqual(first("facebook"), "META")
+        self.assertEqual(first("nvidai"), "NVDA")
+        self.assertEqual(first("GOOGL"), "GOOG")
+        self.assertEqual([row["symbol"] for row in transcript.search_companies("alphabet")], ["GOOG"])
+        self.assertEqual(transcript.search_companies("coke")[0]["name"], "Coca-Cola Company")
+
     def test_retry_reuses_transcript_but_does_not_cache_provider_errors(self):
         transcript._fetch_transcript.cache_clear()
         self.addCleanup(transcript._fetch_transcript.cache_clear)

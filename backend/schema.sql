@@ -1,21 +1,5 @@
--- SERIAL: automatically increments (1,2,3 ... )
--- PRIMARY KEY: main row identifier 
--- VARCHAR(N): text up to N characters
--- UNIQUE: every entry min this column for the table must be unique
--- NOT NULL: must exist and cant be null no way
--- TIMESTAMP: date + time
--- DEFAULT CURRENT_TIMESTAMP: automatically set when the user is created (Ex: 2026-03-12 14:22:01)
--- TEXT: very long text
-
-
--- USERS own saved tickers and analyses. 
--- analyses belong to transcripts
-
-
--- column names
--- user table
--- storges registered users
-
+-- PostgreSQL schema. Existing installations use backend/migrations/ for updates.
+-- Account tables are retained for compatibility; public reports can be anonymous.
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -23,20 +7,9 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
--- Example:
--- | id | user_id | ticker | company_name |
--- | -- | ------- | ------ | ------------ |
--- | 1  | 5       | AAPL   | Apple        |
--- | 2  | 5       | NVDA   | Nvidia       |
-
--- stock market ticker table
--- which companies each user is tracking
 CREATE TABLE saved_tickers (
     id SERIAL PRIMARY KEY,
 
-    -- FOREIGN KEY: AKA, this value must match an id from the users table
-    -- ON DELETE CASCADE: AKA if a user is deleted (so their id is deleted), it automatically deletes all their saved tickers 
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
 
 
@@ -45,8 +18,6 @@ CREATE TABLE saved_tickers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- transcripts table for each earnings call
--- raw earnings call text fetched from the API that we will then store
 CREATE TABLE transcripts (
     id SERIAL PRIMARY KEY,
     ticker VARCHAR(10) NOT NULL,
@@ -56,8 +27,6 @@ CREATE TABLE transcripts (
     fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- analaysis table
--- AI output for each transcript, linked to both the transcript and the user that requested for it
 CREATE TABLE analyses (
     id SERIAL PRIMARY KEY,
     transcript_id INTEGER REFERENCES transcripts(id) ON DELETE CASCADE,

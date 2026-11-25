@@ -4,6 +4,7 @@ import { apiRequest, streamAnalysis } from "./api.js";
 import ResearchReport, { SourceViewer, FindingCard } from "./ResearchReport.jsx";
 import { reportIdFromSearch, reportUrl } from "./reportNavigation.js";
 import { callDateLabel } from "./reportPresentation.js";
+import { animateStockStrip } from "./stockStrip.js";
 
 const COMPANIES = { AAPL: "Apple", NVDA: "NVIDIA", PYPL: "PayPal", MSFT: "Microsoft" };
 
@@ -205,7 +206,11 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const [featured, setFeatured] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewError, setPreviewError] = useState("");
+  const strip = useRef(null);
   const chart = useRef(null);
+  useEffect(() => {
+    if (history.length >= 2) return animateStockStrip(strip.current);
+  }, [history]);
   function previewCall(item) {
     setFeatured(item);
     if (window.matchMedia("(max-width:950px)").matches) chart.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion:reduce)").matches ? "auto" : "smooth", block: "start" });
@@ -223,10 +228,11 @@ function MarketLanding({ history, total, sort, onSort, loading, error, onRetry, 
   const matches = history.filter((item) => `${item.ticker} ${COMPANIES[item.ticker] || ""} ${item.year} Q${item.quarter} ${callDateLabel(item.call_date)}`.toLowerCase().includes(query.toLowerCase()));
   const displayedPreview = preview?.report_id === featured?.report_id ? preview : null;
   const excerpt = displayedPreview?.research?.findings?.find((finding) => finding.citations?.[0]?.quote)?.citations[0].quote;
+  if (loading && !history.length && !query) return <section className="startup-loading" role="status" aria-live="polite"><span className="spinner" aria-hidden="true"/><div><h2>Getting things ready…</h2><p>The app can take a few seconds to wake up after some time away. Hang tight — your reports will appear here automatically.</p></div></section>;
   return <div className="landing-workstation">
     <section className="earnings-strip" aria-label="Choose a call to preview its price history">
       <div className="earnings-strip-label"><strong>1-day returns</strong><span>Select a call</span></div>
-      <div className="earnings-strip-calls" role="group" aria-label="Preview a call">
+      <div className="earnings-strip-calls" ref={strip} role="group" aria-label="Preview a call">
         {history.map((item) => <button type="button" key={item.report_id} aria-pressed={featured?.report_id === item.report_id} aria-label={`Preview ${item.ticker}, ${callDateLabel(item.call_date)}, Q${item.quarter} FY${item.year}`} onClick={() => previewCall(item)}>
           <span className="strip-symbol">{item.ticker}<b className={returnTone(item.return_1day)}>{returnLabel(item.return_1day)}</b></span>
           <span className="strip-date">{callDateLabel(item.call_date)}<span>Q{item.quarter} FY{item.year}</span></span>
@@ -371,9 +377,9 @@ export default function App() {
 
   return <div className={`app research-desk ${isHome ? "market-home" : ""}`}>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header className="app-header"><div className="header-inner"><a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-name"><strong>Earnings</strong> Analyzer</span></a><nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()}>Reports</button><a href="/review.html">How it works</a><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer">GitHub ↗</a></nav></div></header>
+    <header className="app-header"><div className="header-inner"><a className="brand" href="?" onClick={(event) => { event.preventDefault(); goHome(); }}><span className="brand-name"><strong>Earnings Call</strong> <em>Analyzer</em></span></a><nav className="header-nav" aria-label="Main navigation"><button type="button" onClick={() => goHome()}>Reports</button><a className="source-link" href="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer" target="_blank" rel="noreferrer"><svg className="github-mark" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>GitHub ↗</a></nav></div></header>
     <main className="main" id="main">
-      {isHome && <header className="landing-heading"><div><h1>Earnings calls<span aria-hidden="true">.</span></h1><p>Transcripts, forecasts<br className="landing-title-break"/> and price moves.</p></div></header>}
+      {isHome && <h1 className="sr-only">Earnings Call Analyzer</h1>}
       <div className="desk-controls" hidden={Boolean(loading)}><section className="search-section" aria-label="Find an earnings call"><SearchBar onSubmit={handleSubmit} loading={loading} period={result || requestedPeriod} reports={history} /><p className="period-help">{isHome ? "Fiscal years can differ from calendar years." : "Use the company’s fiscal year, which can differ from the call’s calendar year."}</p></section>{result && <CallLibrary history={history} total={total} sort={sort} onSort={(value) => { setSort(value); setLimit(20); }} loading={historyLoading} error={historyError} onRetry={() => setRefreshKey((value) => value + 1)} onSelect={openSaved} selectedId={result.report_id} onMore={() => setLimit((value) => value + 20)} />}</div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className={`desk-grid view-${reportView} ${result ? "report-open" : "no-report"}`}>
@@ -381,7 +387,7 @@ export default function App() {
           {loading && !pending && <div className="loading-state report-loading" role="status" aria-live="polite">
             {requestedPeriod && <div className="loading-call"><CompanyMark ticker={requestedPeriod.ticker} /><div><h1>{COMPANIES[requestedPeriod.ticker] || requestedPeriod.ticker}</h1><p>{requestedPeriod.ticker} · Q{requestedPeriod.quarter} FY{requestedPeriod.year}</p></div></div>}
             <div className="loading-bar"><div className="loading-fill" /></div>
-            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Fetching the call transcript…"}<span>{loading === "saved" ? "Opening an existing report. No new analysis is needed." : "You can read the transcript as soon as it arrives."}</span></p>
+            <p className="loading-text">{loading === "saved" ? "Opening report…" : "Fetching the call transcript…"}<span>{loading === "saved" ? "The app may need a few seconds to wake up after some time away. Your saved report will open automatically." : "You can read the transcript as soon as it arrives."}</span></p>
             <div className="loading-actions"><span className="elapsed" aria-hidden="true">{elapsed}s elapsed</span><button type="button" className="text-btn" onClick={() => goHome()}>Browse reports</button></div>
           </div>}
           {pending && <div className="results pending-report">
@@ -405,12 +411,14 @@ export default function App() {
               tabs[next].focus(); tabs[next].click();
             }}>{[["overview", "Overview"], ["findings", "Findings"], ["concerns", "Concerns"], ["market", "Share price"], ["research", "Forecasts & news"]].map(([id, label]) => <button type="button" role="tab" key={id} id={`tab-${id}`} data-view={id} aria-selected={reportView === id} aria-controls="report-panel" tabIndex={reportView === id ? 0 : -1} onClick={() => setReportView(id)}>{label}</button>)}</nav>
             <div id="report-panel" role="tabpanel" aria-labelledby={`tab-${reportView}`} tabIndex={0} className="report-workspace">
+              <div className="report-content">
               {reportView === "overview" && result.research?.financial_highlights.length > 0 && <section className="financial-highlights" aria-label="Company-reported financial highlights">{result.research.financial_highlights.slice(0, 3).map((metric) => <button type="button" className="financial-highlight" key={metric.id} onClick={() => setSource(metric.citations[0])} aria-label={`${metric.label}: ${metric.value}. Inspect source`}><span>{metric.label}</span><strong className="financial-value">{metric.value}</strong></button>)}</section>}
               {reportView === "market" ? <MarketPanel result={result} /> : <div className="brief-pane"><ResearchReport key={result.report_id} result={result} view={reportView} onSource={setSource} onPlayback={setPlayback} /></div>}
+              </div>
+              {reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
             </div>
           </div>}
         </section>
-        {result && reportView !== "market" && <aside className="price-rail" aria-label="Historical stock reaction"><MarketPanel result={result} compact onExplore={() => setReportView("market")} /></aside>}
       </div>
       {result && source !== undefined && <SourceViewer key={result.report_id} reportId={result.report_id} citation={source} expectedHash={result.research?.source_hash} playback={playback} onClose={() => setSource(undefined)} />}
       {previewSource && <SourceViewer initialData={previewSource.data} citation={previewSource.citation} expectedHash={previewSource.data.source_hash} onClose={() => {setPreviewSource(null); if (result) reportHeading.current?.focus({preventScroll:true});}} />}

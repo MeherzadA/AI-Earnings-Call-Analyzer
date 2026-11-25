@@ -29,7 +29,7 @@ export default function Analyzing({ period, pending, error, elapsed, names, onHo
   return <div className="m-report m-analyzing">
     <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <section className="m-rhero">
-      <p className="m-crumb m-mono"><a href="?" onClick={(event) => { event.preventDefault(); onHome(); }}>Library</a> / {name} / {periodLabel(period)}</p>
+      <nav className="m-crumbs m-crumbs-dark" aria-label="Breadcrumb"><a href="?view=library" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a><span aria-hidden="true">/</span><a href={`?view=library&company=${period.ticker}`} onClick={(event) => { event.preventDefault(); onHome("library", true, period.ticker); }}>{name}</a><span aria-hidden="true">/</span><span aria-current="page">{periodLabel(period)}</span></nav>
       <div className="m-rhero-top">
         <CompanyLogo ticker={period.ticker} size={76} radius={20} className="m-rhero-logo" alt={name} />
         <div className="m-rhero-title">
@@ -38,7 +38,7 @@ export default function Analyzing({ period, pending, error, elapsed, names, onHo
         </div>
         <div className="m-rhero-actions"><div className="m-rhero-btns">
           {passages && <button type="button" className="m-btn m-btn-ghost" onClick={() => setDrawer({ focus: finding?.citations[0].passage_id })}>Read the transcript now</button>}
-          <button type="button" className="m-btn m-btn-ghost" onClick={() => onHome()}>{failed ? "Back to the library" : "Browse while it reads"}</button>
+          <button type="button" className="m-btn m-btn-ghost" onClick={() => onHome("library")}>{failed ? "Back to the library" : "Browse while it reads"}</button>
         </div></div>
       </div>
       <div className="m-rhero-grid">

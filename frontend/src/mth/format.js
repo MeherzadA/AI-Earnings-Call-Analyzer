@@ -5,8 +5,36 @@ export const NAMES = {
   AMZN: "Amazon", META: "Meta", TSLA: "Tesla", LITE: "Lumentum", VET: "Vermilion", VOXX: "VOXX", VARRY: "Vår Energi",
 };
 
-// Files bundled in public/logos. Anything else falls back to a monogram.
+// Files bundled in public/logos; other tickers try public logo CDNs, then a monogram.
 export const LOGOS = { AAPL: "apple", NVDA: "nvidia", PYPL: "paypal", MSFT: "microsoft" };
+
+export function logoSources(ticker) {
+  if (!ticker) return [];
+  const symbol = encodeURIComponent(String(ticker).toUpperCase());
+  return [
+    LOGOS[ticker] && `/logos/${LOGOS[ticker]}.svg`,
+    `https://financialmodelingprep.com/image-stock/${symbol}.png`,
+    `https://assets.parqet.com/logos/symbol/${symbol}?format=png`,
+  ].filter(Boolean);
+}
+
+// Bundled marks in public/publishers, matched on the feed's publisher name.
+const PUBLISHERS = [
+  [/reuters/i, "reuters"], [/bloomberg/i, "bloomberg"], [/cnbc/i, "cnbc"], [/wall street journal|\bwsj\b/i, "wsj"],
+  [/barron/i, "barrons"], [/marketwatch/i, "marketwatch"], [/financial times|\bft\b/i, "ft"], [/yahoo/i, "yahoo"],
+  [/motley fool|\bfool\b/i, "fool"], [/seeking alpha/i, "seekingalpha"], [/investopedia/i, "investopedia"],
+  [/benzinga/i, "benzinga"], [/thestreet/i, "thestreet"], [/techcrunch/i, "techcrunch"], [/9to5mac/i, "9to5mac"],
+  [/\bcnn\b/i, "cnn"], [/\bcbs\b/i, "cbs"], [/associated press|^ap\b|ap news/i, "ap"],
+];
+
+export function publisherIcon(item) {
+  const match = PUBLISHERS.find(([pattern]) => pattern.test(item?.source || ""));
+  if (match) return `/publishers/${match[1]}.png`;
+  try {
+    const host = new URL(item?.site || "").hostname;
+    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64` : null;
+  } catch { return null; }
+}
 
 export const CATEGORIES = {
   performance: { label: "Results", fg: "#1E7A46", ink: "#B6F5C9" },
@@ -20,8 +48,12 @@ export function periodLabel(item) {
   return `Q${Number(item.quarter)} FY${String(item.year).slice(-2)}`;
 }
 
+// Share classes of one company (saved reports exist under both GOOG and GOOGL).
+const SHARE_CLASSES = { GOOGL: "GOOG", GOOGM: "GOOG", GOOGN: "GOOG", "BRK-A": "BRK-B" };
+export const companyKey = (ticker) => SHARE_CLASSES[ticker] || ticker;
+
 export function samePeriod(a, b) {
-  return a && b && a.ticker === b.ticker && Number(a.year) === Number(b.year) && Number(a.quarter) === Number(b.quarter);
+  return a && b && companyKey(a.ticker) === companyKey(b.ticker) && Number(a.year) === Number(b.year) && Number(a.quarter) === Number(b.quarter);
 }
 
 // Typographic minus so signed columns line up in tabular figures.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
 import { companyName, highlightPeriod, markRange, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
-import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
+import { CategoryChip, CompanyLogo, Kbd, PublisherIcon, QuoteRail, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
 import { AppBar } from "./Landing.jsx";
 
 export function useNarrow(query = "(max-width: 999px)") {
@@ -286,7 +286,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
   return <div className="m-report">
     <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <section className="m-rhero">
-      <p className="m-crumb m-mono"><a href="?" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a> / {name} / {periodLabel(report)}</p>
+      <nav className="m-crumbs m-crumbs-dark" aria-label="Breadcrumb"><a href="?view=library" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a><span aria-hidden="true">/</span><a href={`?view=library&company=${report.ticker}`} onClick={(event) => { event.preventDefault(); onHome("library", true, report.ticker); }}>{name}</a><span aria-hidden="true">/</span><span aria-current="page">{periodLabel(report)}</span></nav>
       <div className="m-rhero-top">
         <CompanyLogo ticker={report.ticker} size={76} radius={20} className="m-rhero-logo" alt={name} />
         <div className="m-rhero-title">
@@ -407,7 +407,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
       </div>
       <div className="m-news-list">
         {!news && contextState === "loading" && Array.from({ length: 4 }, (_, i) => <div key={i} className="m-news is-skeleton"><Skeleton width={110} height={12} /><Skeleton height={16} /><Skeleton width={80} height={12} /></div>)}
-        {news?.items?.map((item) => <a key={item.url} className="m-news" href={item.url} target="_blank" rel="noreferrer"><span className="m-mono m-news-src">{item.source}</span><span className="m-news-title">{newsTitle(item)}</span><span className="m-mono m-news-date">{shortDate(item.published_at)}</span><span aria-hidden="true" className="m-news-arrow">↗</span></a>)}
+        {news?.items?.map((item) => <a key={item.url} className="m-news" href={item.url} target="_blank" rel="noreferrer"><span className="m-news-src"><PublisherIcon item={item} />{item.source}</span><span className="m-news-title">{newsTitle(item)}</span><span className="m-mono m-news-date">{shortDate(item.published_at)}</span><span aria-hidden="true" className="m-news-arrow">↗</span></a>)}
         {news && !news.items?.length && <p className="m-muted m-news-empty">{news.message || "No matching headlines were found for the two weeks before the call."}</p>}
         {!news && contextState === "error" && <p className="m-muted m-news-empty">Headlines couldn’t be loaded right now.</p>}
       </div>

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { CATEGORIES, LOGOS, companyName, priceGeometry } from "./format.js";
+import { CATEGORIES, companyName, logoSources, priceGeometry, publisherIcon } from "./format.js";
 
 export function useReducedMotion() {
   const query = "(prefers-reduced-motion: reduce)";
@@ -35,12 +35,25 @@ export function useElementWidth(fallback = 1200) {
   return [ref, width];
 }
 
+// Remember which source worked (or that none did) so lists don't re-try failing URLs.
+const logoChoice = new Map();
+
 export function CompanyLogo({ ticker, size = 40, radius, className = "", alt = "" }) {
-  const [failed, setFailed] = useState(false);
-  const file = LOGOS[ticker];
+  const sources = logoSources(ticker);
+  const [index, setIndex] = useState(() => logoChoice.get(ticker) ?? 0);
+  useEffect(() => { setIndex(logoChoice.get(ticker) ?? 0); }, [ticker]);
   const style = { width: size, height: size, borderRadius: radius ?? Math.round(size * 0.28), fontSize: Math.round(size * 0.42) };
-  if (!file || failed) return <span className={`m-logo m-monogram ${className}`} style={style} role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true}>{(ticker || "?").slice(0, 1)}</span>;
-  return <img className={`m-logo ${className}`} style={style} src={`/logos/${file}.svg`} alt={alt} onError={() => setFailed(true)} />;
+  if (index >= sources.length) return <span className={`m-logo m-monogram ${className}`} style={style} role={alt ? "img" : undefined} aria-label={alt || undefined} aria-hidden={alt ? undefined : true}>{(ticker || "?").slice(0, 1)}</span>;
+  return <img className={`m-logo ${className}`} style={style} src={sources[index]} alt={alt} loading="lazy" referrerPolicy="no-referrer"
+    onLoad={() => logoChoice.set(ticker, index)}
+    onError={() => { logoChoice.set(ticker, index + 1); setIndex(index + 1); }} />;
+}
+
+export function PublisherIcon({ item, size = 20 }) {
+  const [failed, setFailed] = useState(false);
+  const src = publisherIcon(item);
+  if (!src || failed) return <span className="m-pub-icon m-monogram" style={{ width: size, height: size, fontSize: Math.round(size * 0.55) }} aria-hidden="true">{(item?.source || "?").slice(0, 1)}</span>;
+  return <img className="m-pub-icon" src={src} alt="" width={size} height={size} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
 export function Kbd({ children, dark = false, label }) {

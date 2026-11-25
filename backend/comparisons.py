@@ -45,7 +45,7 @@ def additional_comparisons(previous_text, current_text, outlooks, quarter, year,
     ordinal = ("first", "second", "third", "fourth")[quarter - 1]
     target = re.compile(rf"\b(?:Q{quarter}|{ordinal} quarter)\b", re.I)
     for sentence, citation in sentences(previous_text):
-        # ponytail: require the forecast sentence itself to name the quarter; skip inherited section scope.
+        # Require the forecast sentence to name the quarter; inherited section scope is not used.
         if not (target.search(sentence) or any(term.lower() in sentence.lower() for term in period_terms)):
             continue
         if any(int(value) != year for value in re.findall(r"\b20\d{2}\b", sentence)) or re.search(r"\b(?:products|services|segment|adjusted|non.GAAP|full.year|annual)\b", sentence, re.I):

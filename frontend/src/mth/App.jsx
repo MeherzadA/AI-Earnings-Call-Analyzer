@@ -7,6 +7,7 @@ import Landing, { AppBar, SiteFooter } from "./Landing.jsx";
 import Report from "./Report.jsx";
 import Analyzing from "./Analyzing.jsx";
 import CommandMenu from "./Command.jsx";
+import LibraryPage from "./Library.jsx";
 
 function ReportSkeleton({ onHome, onCommand }) {
   return <div className="m-report" aria-busy="true">
@@ -56,20 +57,28 @@ function Shell() {
     return () => { cancelled = true; };
   }, [historyKey]);
 
-  const setLocation = (id, push = true) => {
+  const setLocation = (id, push = true, page = null) => {
     shown.current = id ?? null;
     const url = new URL(window.location.href);
-    if (id) url.searchParams.set("report", String(id)); else url.searchParams.delete("report");
+    url.search = "";
+    if (id) url.searchParams.set("report", String(id));
+    if (page?.view) url.searchParams.set("view", page.view);
+    if (page?.company) url.searchParams.set("company", page.company);
     url.hash = "";
     if (url.toString() !== window.location.href) window.history[push ? "pushState" : "replaceState"]({}, "", url);
   };
   const show = (next) => withTransition(() => { setView(next); window.scrollTo({ top: 0 }); });
 
-  function home(target, push = true) {
+  // home("library", ticker) opens the library page, optionally narrowed to one company.
+  function home(target, push = true, company = null) {
     request.current += 1;
+    if (target === "library") {
+      setLocation(null, push, { view: "library", company });
+      show({ kind: "library", company });
+      return;
+    }
     setLocation(null, push);
     show({ kind: "home" });
-    if (target === "library") requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById("library")?.scrollIntoView({ block: "start" })));
   }
 
   async function openReport(item, passage, push = true) {
@@ -115,8 +124,10 @@ function Shell() {
   useEffect(() => {
     function navigate() {
       const id = reportIdFromSearch(window.location.search);
+      const params = new URLSearchParams(window.location.search);
       if (id && id === shown.current) return;
       if (id) openReport({ report_id: id }, null, false);
+      else if (params.get("view") === "library") home("library", false, params.get("company")?.toUpperCase() || null);
       else {
         const invalid = new URLSearchParams(window.location.search).has("report");
         home(null, false);
@@ -146,9 +157,10 @@ function Shell() {
 
   useEffect(() => {
     const subject = view.report || view.period;
-    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · Earnings Analyzer` : "Earnings Analyzer";
+    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · Earnings Analyzer` : view.kind === "library" ? `${view.company ? `${companyName(view.company, names)} · ` : ""}Library · Earnings Analyzer` : "Earnings Analyzer";
     if (view.kind === "report" || view.kind === "analyzing") document.getElementById("report-title")?.focus({ preventScroll: true });
-  }, [view.kind, view.report?.report_id, view.period?.ticker]);
+    if (view.kind === "library") document.getElementById("library-title")?.focus({ preventScroll: true });
+  }, [view.kind, view.report?.report_id, view.period?.ticker, view.company]);
 
   const openCommand = () => setCommand(true);
   const actions = [
@@ -159,7 +171,8 @@ function Shell() {
   return <>
     <a className="m-skip" href="#main">Skip to content</a>
     <main id="main" className="m-app">
-      {view.kind === "home" && <Landing history={history} total={total} historyState={historyState} names={names} onNames={addNames} onOpen={(item, passage) => openReport(item, passage)} onAnalyze={analyze} onCommand={openCommand} onRetry={() => setHistoryKey((key) => key + 1)} />}
+      {view.kind === "library" && <LibraryPage history={history} total={total} state={historyState} names={names} company={view.company} onCompany={(ticker) => home("library", true, ticker)} onOpen={(item) => openReport(item)} onHome={home} onCommand={openCommand} onRetry={() => setHistoryKey((key) => key + 1)} />}
+      {view.kind === "home" && <Landing history={history} total={total} historyState={historyState} names={names} onNames={addNames} onOpen={(item, passage) => openReport(item, passage)} onAnalyze={analyze} onCommand={openCommand} onLibrary={() => home("library")} onRetry={() => setHistoryKey((key) => key + 1)} />}
       {view.kind === "loading" && <ReportSkeleton onHome={home} onCommand={openCommand} />}
       {view.kind === "error" && <ErrorView message={view.message} onRetry={view.retry} onHome={home} onCommand={openCommand} />}
       {view.kind === "report" && <Report key={view.report.report_id} report={view.report} initialPassage={view.passage} history={history} names={names} onOpen={(item) => openReport(item)} onHome={home} onCommand={openCommand} />}

@@ -1,10 +1,4 @@
-# file to represent database tables and itneract w/ DB via python objects and not SQL 
-
-# literally just map each DB table to a Pythonic class
-
-
-# relationship(): Python connection between tables; Ex: user.saved_tickers automatically getss all tickers belonging to the specific user
-# back_populates: makes the relationship work both ways, so you can go from a user to their tickers, or from a ticker back to its user
+"""Database models for transcripts, reports, and legacy user records."""
 
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, TIMESTAMP, Float
 from sqlalchemy.orm import relationship

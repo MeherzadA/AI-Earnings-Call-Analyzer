@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { CATEGORIES, LOGOS, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
+import { CATEGORIES, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
 import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, modKey } from "./ui.jsx";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const YEARS_SHOWN = 3;
 
 export function AppBar({ variant = "landing", onHome, onCommand, onLibrary }) {
   const mod = modKey();
@@ -21,7 +22,7 @@ export function AppBar({ variant = "landing", onHome, onCommand, onLibrary }) {
 function useFeatured(history) {
   const [featuredId, setFeaturedId] = useState(null);
   const [reports, setReports] = useState({});
-  const pick = useMemo(() => history.find((item) => item.has_research && LOGOS[item.ticker]) || history.find((item) => item.has_research), [history]);
+  const pick = useMemo(() => history.find((item) => item.has_research), [history]);
   const id = featuredId ?? pick?.report_id;
   useEffect(() => {
     if (!id || reports[id]) return;
@@ -41,6 +42,7 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
   const [periods, setPeriods] = useState(null);
   const [active, setActive] = useState(0);
   const [status, setStatus] = useState("idle");
+  const [allYears, setAllYears] = useState(false);
   const input = useRef(null);
   const symbol = query.trim();
 
@@ -66,17 +68,23 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
     let cancelled = false;
     apiRequest(`/transcripts/${encodeURIComponent(company.symbol)}/periods`, { timeoutMs: 15000 }).then((data) => {
       if (cancelled) return;
+      // Newest year first, quarters left to right, matching the grid below.
       const sorted = (data.periods || []).filter((item) => !item.call_date || item.call_date.slice(0, 10) <= today())
-        .sort((a, b) => b.year - a.year || b.quarter - a.quarter).map((item) => ({ ...item, ticker: company.symbol }));
+        .sort((a, b) => b.year - a.year || a.quarter - b.quarter).map((item) => ({ ...item, ticker: company.symbol }));
       setPeriods(sorted);
-      const ready = sorted.slice(0, 6).findIndex((item) => readyReport(item));
-      setActive(Math.max(0, ready));
+      setAllYears(false);
+      const newestYear = sorted[0]?.year;
+      const firstRow = sorted.filter((item) => item.year === newestYear);
+      setActive(Math.max(0, firstRow.length - 1));
     }).catch(() => { if (!cancelled) setPeriods([]); });
     return () => { cancelled = true; };
   }, [company?.symbol]);
 
   const readyReport = (period) => history.find((item) => item.has_research && samePeriod(item, period));
-  const suggestions = symbol ? (periods || []).slice(0, 6) : history.filter((item) => item.has_research).slice(0, 4);
+  const years = [...new Set((periods || []).map((item) => item.year))];
+  const shownYears = allYears ? years : years.slice(0, YEARS_SHOWN);
+  const suggestions = symbol ? (periods || []).filter((item) => shownYears.includes(item.year)) : history.filter((item) => item.has_research).slice(0, 4);
+  const gridMode = Boolean(symbol && company);
   const choose = (item) => {
     if (!item) return;
     const ready = readyReport(item);
@@ -85,13 +93,25 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
   function onKeyDown(event) {
     const count = suggestions.length;
     if (!count) return;
-    if (["ArrowDown", "ArrowRight"].includes(event.key) && (event.key === "ArrowDown" || input.current.selectionStart === query.length)) { event.preventDefault(); setActive((i) => (i + 1) % count); }
-    if (["ArrowUp", "ArrowLeft"].includes(event.key) && (event.key === "ArrowUp" || input.current.selectionStart === query.length)) { event.preventDefault(); setActive((i) => (i - 1 + count) % count); }
+    const atEnd = input.current.selectionStart === query.length;
+    if (gridMode && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      // Move to the same quarter (or the nearest one) in the next or previous fiscal year.
+      event.preventDefault();
+      const current = suggestions[Math.min(active, count - 1)];
+      const yearIndex = shownYears.indexOf(current.year) + (event.key === "ArrowDown" ? 1 : -1);
+      if (yearIndex < 0 || yearIndex >= shownYears.length) return;
+      const row = suggestions.map((item, index) => [item, index]).filter(([item]) => item.year === shownYears[yearIndex]);
+      const [, next] = row.reduce((best, pair) => Math.abs(pair[0].quarter - current.quarter) < Math.abs(best[0].quarter - current.quarter) ? pair : best);
+      setActive(next);
+      return;
+    }
+    if (["ArrowDown", "ArrowRight"].includes(event.key) && (event.key === "ArrowDown" || atEnd)) { event.preventDefault(); setActive((i) => (i + 1) % count); }
+    if (["ArrowUp", "ArrowLeft"].includes(event.key) && (event.key === "ArrowUp" || atEnd)) { event.preventDefault(); setActive((i) => (i - 1 + count) % count); }
     if (event.key === "Escape") setQuery("");
   }
   const selected = suggestions[Math.min(active, suggestions.length - 1)];
   const showCallOptions = suggestions.length > 0 || (symbol && company && !periods);
-  const hint = status === "searching" || (company && !periods) ? "Checking which calls exist…" : status === "none" ? `No transcripts match “${symbol}”. Try a ticker like NVDA.` : status === "error" ? "Coverage couldn’t be checked. Try again in a moment." : symbol && periods && !periods.length ? `No past calls found for ${company.symbol}.` : null;
+  const hint = status === "searching" && !company ? "Searching…" : status === "none" ? `No transcripts match “${symbol}”. Try a ticker like NVDA.` : status === "error" ? "Coverage couldn’t be checked. Try again in a moment." : symbol && periods && !periods.length ? `No past calls found for ${company.symbol}.` : null;
   const showSearchFoot = Boolean(hint || (symbol && companies.length > 1));
 
   return <form className="m-search" role="search" onSubmit={(event) => { event.preventDefault(); choose(selected); }}>
@@ -102,21 +122,43 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
         role="combobox" aria-expanded={suggestions.length > 0} aria-controls={showCallOptions ? "m-search-calls" : undefined} aria-activedescendant={selected ? `m-call-${suggestions.indexOf(selected)}` : undefined} aria-describedby={showSearchFoot ? "m-search-hint" : undefined} />
       <button type="submit" className="m-search-go" disabled={!selected}>{selected && readyReport(selected) ? "Open report" : "Analyze call"}<span aria-hidden="true">⏎</span></button>
     </label>
-    {showCallOptions && <div className="m-search-row">
-      {symbol && company ? <CompanyLogo ticker={company.symbol} size={28} radius={8} /> : <span className="m-search-row-label">{history.length ? "Ready now" : ""}</span>}
-      <div className="m-search-calls" id="m-search-calls" role="listbox" aria-label={symbol && company ? `${company.name} calls` : "Calls ready to open"}>
-        {symbol && company && !periods && [0, 1, 2, 3].map((i) => <Skeleton key={i} width={104} height={34} radius={999} />)}
-        {suggestions.map((item, index) => {
-          const ready = !symbol || readyReport(item);
-          return <button type="button" role="option" id={`m-call-${index}`} key={`${item.ticker}-${item.year}-${item.quarter}`} aria-selected={index === active} className={`m-qchip ${index === active ? "is-active" : ""}`}
-            onMouseEnter={() => setActive(index)} onClick={() => choose(item)} title={item.call_date ? `Call on ${shortDate(item.call_date)}` : undefined}>
-            {!symbol && <CompanyLogo ticker={item.ticker} size={20} radius={6} />}
-            {!symbol ? `${companyName(item.ticker, names)} ${periodLabel(item)}` : periodLabel(item)}
-            <span className={`m-qchip-state ${ready ? "is-ready" : ""}`}>{ready ? "Ready" : "About 40 sec"}</span>
-          </button>;
-        })}
+    {showCallOptions && gridMode && <div className="m-qgrid-wrap">
+      <div className="m-qgrid-head">
+        <CompanyLogo ticker={company.symbol} size={28} radius={8} />
+        <b>{companyName(company.symbol, names)}</b>
+        <span className="m-qgrid-count">{periods ? `${periods.length} calls on record` : "Checking which calls exist…"}</span>
       </div>
-      <span className="m-search-keys" aria-hidden="true">↑↓ ⏎</span>
+      <div className="m-qgrid" id="m-search-calls" role="listbox" aria-label={`${company.name} calls`}>
+        {!periods && [0, 1].map((i) => <div className="m-qgrid-row" key={i}><Skeleton width={44} height={14} />{[0, 1, 2, 3].map((q) => <Skeleton key={q} height={40} radius={4} />)}</div>)}
+        {shownYears.map((year) => <div className="m-qgrid-row" role="group" aria-label={`Fiscal ${year}`} key={year}>
+          <span className="m-qgrid-year">FY{String(year).slice(-2)}</span>
+          {[1, 2, 3, 4].map((quarter) => {
+            const index = suggestions.findIndex((item) => item.year === year && item.quarter === quarter);
+            if (index < 0) return <span className="m-qcell is-empty" key={quarter} aria-hidden="true" />;
+            const item = suggestions[index];
+            const ready = readyReport(item);
+            return <button type="button" role="option" id={`m-call-${index}`} key={quarter} aria-selected={index === active} className={`m-qcell ${index === active ? "is-active" : ""} ${ready ? "is-ready" : ""}`}
+              onMouseEnter={() => setActive(index)} onClick={() => choose(item)} aria-label={`${periodLabel(item)}${item.call_date ? `, call on ${shortDate(item.call_date)}` : ""}${ready ? ", report ready" : ", analyze in about 40 seconds"}`}>
+              <b>Q{quarter}</b>
+              <small>{ready ? "Ready" : item.call_date ? shortDate(item.call_date, false) : "Analyze"}</small>
+            </button>;
+          })}
+        </div>)}
+      </div>
+      {periods && years.length > YEARS_SHOWN && <button type="button" className="m-qgrid-more" onClick={() => setAllYears((value) => !value)}>
+        {allYears ? "Show recent years only" : `Show all ${years.length} years (back to FY${String(years.at(-1)).slice(-2)})`}
+      </button>}
+    </div>}
+    {showCallOptions && !gridMode && <div className="m-search-row">
+      <span className="m-search-row-label">{history.length ? "Ready now" : ""}</span>
+      <div className="m-search-calls" id="m-search-calls" role="listbox" aria-label="Calls ready to open">
+        {suggestions.map((item, index) => <button type="button" role="option" id={`m-call-${index}`} key={`${item.ticker}-${item.year}-${item.quarter}`} aria-selected={index === active} className={`m-qchip ${index === active ? "is-active" : ""}`}
+          onMouseEnter={() => setActive(index)} onClick={() => choose(item)} title={item.call_date ? `Call on ${shortDate(item.call_date)}` : undefined}>
+          <CompanyLogo ticker={item.ticker} size={20} radius={6} />
+          {`${companyName(item.ticker, names)} ${periodLabel(item)}`}
+          <span className="m-qchip-state is-ready">Ready</span>
+        </button>)}
+      </div>
     </div>}
     {showSearchFoot && <div className="m-search-foot" id="m-search-hint" aria-live="polite">
       {hint && <span>{hint}</span>}
@@ -177,13 +219,13 @@ function Preview({ report, history, names, onPick, onOpen, historyState }) {
   </div>;
 }
 
-function Library({ history, total, state, names, onOpen, onRetry, libraryRef }) {
+function Library({ history, total, state, names, onOpen, onRetry, onLibrary, libraryRef }) {
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const items = history.filter((item) => item.has_research);
   const fell = items.filter((item) => item.return_1day < 0).length;
   const rose = items.filter((item) => item.return_1day > 0).length;
-  const visible = filterLibrary(items, filter, query, names);
+  const visible = filterLibrary(items, filter, query, names).slice(0, 8);
   return <section className="m-library" ref={libraryRef} id="library" aria-labelledby="library-title">
     <div className="m-section-head">
       <div><p className="m-eyebrow m-eyebrow-mint">The library</p><h2 className="m-h2" id="library-title">Saved reports.</h2></div>
@@ -204,11 +246,11 @@ function Library({ history, total, state, names, onOpen, onRetry, libraryRef }) 
       </a>)}
     </div>
     {state === "ready" && !visible.length && <p className="m-lib-status">{items.length ? "Nothing matches that filter." : "No reports yet. Search for a company above to start."}</p>}
-    <p className="m-lib-foot">Move = next-day close vs. call-day close.{total > items.length ? ` Showing ${items.length} of ${total}.` : ""}</p>
+    <p className="m-lib-foot">Move = next-day close vs. call-day close. <a href="?view=library" className="m-lib-all" onClick={(event) => { event.preventDefault(); onLibrary(); }}>See all {items.length} saved reports by company</a></p>
   </section>;
 }
 
-export default function Landing({ history, total, historyState, names, onNames, onOpen, onAnalyze, onCommand, onRetry }) {
+export default function Landing({ history, total, historyState, names, onNames, onOpen, onAnalyze, onCommand, onLibrary, onRetry }) {
   const [featured, setFeaturedId] = useFeatured(history);
   const libraryRef = useRef(null);
   const mod = modKey();
@@ -216,7 +258,7 @@ export default function Landing({ history, total, historyState, names, onNames, 
   const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   return <div className="m-landing">
     <section className={`m-hero ${featured ? "" : "m-hero-no-chart"}`}>
-      <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={() => scrollTo(libraryRef)} />
+      <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={onLibrary} />
       <div className="m-hero-center">
         <h1 className="m-hero-title">Review an earnings call.</h1>
         <p className="m-hero-sub">Search a company or ticker to open a report or analyze a past call.</p>
@@ -261,7 +303,7 @@ export default function Landing({ history, total, historyState, names, onNames, 
       </div>
     </section>
 
-    <Library history={history} total={total} state={historyState} names={names} onOpen={onOpen} onRetry={onRetry} libraryRef={libraryRef} />
+    <Library history={history} total={total} state={historyState} names={names} onOpen={onOpen} onRetry={onRetry} onLibrary={onLibrary} libraryRef={libraryRef} />
     <SiteFooter />
   </div>;
 }
