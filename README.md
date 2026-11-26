@@ -8,9 +8,9 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 
 ## Walkthrough
 
-A continuous 35-second walkthrough of a saved NVIDIA report: search, transcript sources, concerns, forecasts and share prices.
+A 45-second walkthrough of the live site, without sound. It covers search and the price line that follows what you type. Then it opens a saved NVIDIA report: findings, their source passages, figures, the share price after the call, news, and the library.
 
-https://github.com/user-attachments/assets/53922abf-1089-47ec-8fef-6e46810cf983
+<video src="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/raw/main/docs/demo.mp4" controls muted playsinline width="100%"></video>
 
 ## What it does
 
