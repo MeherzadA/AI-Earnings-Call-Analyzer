@@ -10,7 +10,9 @@ Choose a company, fiscal year, and quarter, or open a report someone has already
 
 A 45-second walkthrough of the live site, without sound. It covers search and the price line that follows what you type. Then it opens a saved NVIDIA report: findings, their source passages, figures, the share price after the call, news, and the library.
 
-<video src="https://github.com/MeherzadA/AI-Earnings-Call-Analyzer/raw/main/docs/demo.mp4" controls muted playsinline width="100%"></video>
+[![Walkthrough of Earnings Analyzer: search, a saved report, its sources, the share price and the library](docs/images/readme-demo.webp)](docs/demo.mp4)
+
+The animation loops at a lower frame rate. Click it for the full-quality video.
 
 ## What it does
 
