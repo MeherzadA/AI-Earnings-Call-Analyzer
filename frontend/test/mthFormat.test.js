@@ -2,8 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   companyName, filterLibrary, highlightPeriod, markRange, money, parseMoney, parseOutlookRange,
-  periodLabel, priceGeometry, promiseChart, samePeriod, shortVersion, signedPct,
+  periodLabel, priceGeometry, promiseChart, railQuote, railQuotes, samePeriod, shortVersion, signedPct,
 } from "../src/mth/format.js";
+
+test("picks one short quote per category for the landing line", () => {
+  assert.equal(railQuote("Revenue grew 62%. Data center led."), "Revenue grew 62%.");
+  assert.ok(railQuote("a ".repeat(80), 40).endsWith("…"));
+  const cite = (quote) => [{ quote }];
+  const quotes = railQuotes([
+    { id: "F1", category: "risks", citations: cite("Supply is tight.") },
+    { id: "F2", category: "performance", citations: cite("Record revenue.") },
+    { id: "F3", category: "performance", citations: cite("Margins held.") },
+    { id: "F4", category: "guidance", citations: [] },
+  ]);
+  assert.deepEqual(quotes.map((item) => item.findingId), ["F2", "F1", "F3"]);
+  assert.equal(quotes[0].label, "RESULTS");
+  assert.deepEqual(railQuotes([]), []);
+});
 
 test("labels periods and matches them across string and number quarters", () => {
   assert.equal(periodLabel({ year: 2026, quarter: "2" }), "Q2 FY26");

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { CATEGORIES, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
+import { CATEGORIES, companyName, filterLibrary, money, moveTone, parseMoney, periodLabel, railQuotes, returnAt, samePeriod, shortDate, signedPct } from "./format.js";
 import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, modKey } from "./ui.jsx";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -32,10 +32,13 @@ function useFeatured(history) {
     return () => { cancelled = true; };
   }, [id]);
   const report = reports[id];
-  return [report && !report.failed ? report : null, setFeaturedId, Boolean(report?.failed)];
+  // Keep showing the last call while the next one loads, so the hero doesn't blink empty.
+  const shown = useRef(null);
+  if (report && !report.failed) shown.current = report;
+  return [shown.current, setFeaturedId, Boolean(report?.failed)];
 }
 
-function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
+function SearchBox({ history, names, onOpen, onAnalyze, onNames, onCompany }) {
   const [query, setQuery] = useState("");
   const [companies, setCompanies] = useState([]);
   const [company, setCompany] = useState(null);
@@ -61,6 +64,8 @@ function SearchBox({ history, names, onOpen, onAnalyze, onNames }) {
     }, 180);
     return () => { cancelled = true; clearTimeout(timer); };
   }, [symbol]);
+
+  useEffect(() => { if (company) onCompany?.(company); }, [company?.symbol]);
 
   useEffect(() => {
     setPeriods(null);
@@ -263,23 +268,29 @@ export default function Landing({ history, total, historyState, names, onNames, 
     return () => clearTimeout(timer);
   }, [historyState]);
   const prices = (featured?.daily_prices || []).slice(0, 7);
+  const quotes = useMemo(() => railQuotes(featured?.research?.findings || []), [featured]);
+  // While someone types, swap the line to that company's latest saved call, if there is one.
+  const followSearch = (company) => {
+    const match = ready.find((item) => item.ticker === company.symbol || (company.name && item.company_name === company.name));
+    if (match) setFeaturedId(match.report_id);
+  };
   return <div className="m-landing">
     <section className={`m-hero ${featured ? "" : "m-hero-no-chart"}`}>
       <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={onLibrary} />
       <div className="m-hero-center">
-        <h1 className="m-hero-title">Find an earnings call</h1>
+        <h1 className="m-hero-title">Find an <span>earnings call.</span></h1>
         <p className="m-hero-sub">Search by company name or ticker. Saved reports open right away. A new call takes about 40 seconds to analyze.</p>
-        <SearchBox history={history} names={names} onOpen={onOpen} onAnalyze={onAnalyze} onNames={onNames} />
+        <SearchBox history={history} names={names} onOpen={onOpen} onAnalyze={onAnalyze} onNames={onNames} onCompany={followSearch} />
         {slow && <p className="m-wake" role="status" aria-live="polite"><span className="m-wake-dot" aria-hidden="true" />Waking the app up. After some time away this takes a few seconds; your reports will appear on their own.</p>}
         {ready.length > 0 && <p className="m-hero-stats">{ready.length} saved reports across {companies} companies · <a href="?view=library" onClick={(event) => { event.preventDefault(); onLibrary(); }}>Browse the library</a></p>}
         {historyState === "error" && <p className="m-hero-stats" role="status">Saved reports couldn’t load. Search still works.</p>}
       </div>
       <div className="m-hero-rail">
-        {featured ? <>
-          <p className="m-rail-caption">{companyName(featured.ticker)} after its {periodLabel(featured)} call</p>
-          {prices.length > 1 ? <QuoteRail prices={prices} height={220} label={`${companyName(featured.ticker)} closing price for ${prices.length - 1} trading days after its ${periodLabel(featured)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}.`} />
+        {featured ? <div key={featured.report_id ?? featured.id} className="m-hero-rail-in">
+          <p className="m-rail-caption"><span aria-hidden="true" />{companyName(featured.ticker, names)} after its {periodLabel(featured)} call{quotes.length ? ", in the call’s own words" : ""}</p>
+          {prices.length > 1 ? <QuoteRail prices={prices} quotes={quotes} height={260} label={`${companyName(featured.ticker)} closing price for ${prices.length - 1} trading days after its ${periodLabel(featured)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}.`} />
             : <p className="m-hero-empty">Closing prices aren’t available for this call. Search for another report above.</p>}
-        </> : <p className="m-hero-empty" role={historyState === "error" ? "status" : undefined}>{historyState === "error" ? "The saved calls couldn’t load. Search by company or ticker above." : historyState === "loading" ? "Loading saved calls…" : "Search for a company or ticker to find a call."}</p>}
+        </div> : <p className="m-hero-empty" role={historyState === "error" ? "status" : undefined}>{historyState === "error" ? "The saved calls couldn’t load. Search by company or ticker above." : historyState === "loading" ? "Loading saved calls…" : "Search for a company or ticker to find a call."}</p>}
       </div>
     </section>
 

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { CATEGORIES, companyName, dateTicks, logoSources, priceGeometry, priceLabel, priceScale, publisherIcon, shortDate, signedPct } from "./format.js";
 
@@ -92,18 +92,59 @@ export function ToastProvider({ children }) {
   </ToastContext.Provider>;
 }
 
-// Daily closing prices after the call.
-export function QuoteRail({ prices, height: tall = 340, label, caption }) {
+// Daily closing prices after the call, with lines from the call written along the curve.
+// The words drift slowly; they hold still on hover, off screen, and for reduced motion.
+export function QuoteRail({ prices, quotes = [], height: tall = 340, label, caption }) {
   const [wrap, width] = useElementWidth(1200);
   const height = width < 640 ? Math.min(tall, Math.round(94 + Math.max(120, width * 0.38))) : tall;
   const inset = width < 640 ? 28 : Math.min(90, width * 0.06);
-  const geometry = priceGeometry(prices || [], { left: inset, right: width - inset, top: 40, bottom: height - 54 });
+  const geometry = priceGeometry(prices || [], { left: inset, right: width - inset, top: Math.round(height * 0.34), bottom: height - 48 });
+  const reduced = useReducedMotion();
+  const id = useId().replace(/:/g, "");
+  const textRef = useRef(null);
+  const hover = useRef(false);
+  const copies = 3;
+  const fontSize = width < 640 ? 12 : 14;
+
+  useEffect(() => {
+    const text = textRef.current;
+    if (!text || !geometry || !quotes.length || reduced) return;
+    const textPath = text.querySelector("textPath");
+    const length = text.getComputedTextLength() / copies;
+    let frame, previous, offset = 0, visible = true;
+    const observer = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; });
+    if (wrap.current) observer.observe(wrap.current);
+    const step = (time) => {
+      if (previous != null && !hover.current && visible && !document.hidden) {
+        offset -= Math.min(time - previous, 64) * 0.03;
+        if (offset <= -length) offset += length;
+        textPath.setAttribute("startOffset", offset.toFixed(1));
+      }
+      previous = time;
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
+  }, [reduced, width, quotes, prices]);
+
   if (!geometry) return <div ref={wrap} className="m-rail m-rail-empty" style={{ height }}>{caption}</div>;
   const last = geometry.points.at(-1);
-  return <div ref={wrap} className="m-rail">
+  return <div ref={wrap} className="m-rail" onPointerEnter={() => { hover.current = true; }} onPointerLeave={() => { hover.current = false; }}>
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
+      <defs>
+        <path id={`rail-${id}`} d={geometry.path} />
+        <linearGradient id={`fill-${id}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#B6F5C9" stopOpacity=".12" /><stop offset="1" stopColor="#B6F5C9" stopOpacity="0" /></linearGradient>
+      </defs>
+      <path d={geometry.area(height)} fill={`url(#fill-${id})`} />
       <path d={geometry.path} fill="none" stroke="#B6F5C9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-      <circle cx={last.x} cy={last.y} r="4" fill="#FFB4A3" stroke="#0F3B2C" strokeWidth="2" />
+      {quotes.length > 0 && <text ref={textRef} className="m-rail-words" fontSize={fontSize} fill="rgba(255,248,236,.82)" dy="-12" aria-hidden="true">
+        <textPath href={`#rail-${id}`} startOffset="0">
+          {Array.from({ length: copies }, (_, copy) => quotes.map((item, index) => <tspan key={`${copy}-${index}`}>
+            <tspan fill={CATEGORIES[item.category]?.ink || "#B6F5C9"} fontWeight="700" letterSpacing=".08em">{item.label}</tspan>{"  "}“{item.quote}”<tspan fill="rgba(182,245,201,.45)">{"   ·   "}</tspan>
+          </tspan>))}
+        </textPath>
+      </text>}
+      <circle cx={last.x} cy={last.y} r="4" fill="#CDBBFF" stroke="#0F3B2C" strokeWidth="2" />
     </svg>
   </div>;
 }

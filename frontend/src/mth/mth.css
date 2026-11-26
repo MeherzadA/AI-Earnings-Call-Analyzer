@@ -2,10 +2,12 @@
 :root {
   --forest: #0F3B2C; --forest-2: #155240; --forest-3: #0B2E22;
   --mint: #B6F5C9; --mint-wash: #DDF6E4; --green: #1E7A46;
+  --lilac: #CDBBFF; --lilac-ink: #5B3FB0;
   --cream: #FFF8EC; --cream-2: #F6F2E8; --cream-3: #F2EBDD; --line: #DAD3C5;
   --ink: #10241C; --ink-2: #354F43; --muted: #526B5D; --faint: #5D7466;
   --salmon: #C2321A; --salmon-ink: #FFB4A3; --amber: #FFD98A; --blue-ink: #A9C8FF;
   --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
+  --display: "Onest", "IBM Plex Sans", "Segoe UI", sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --ease: cubic-bezier(.2, .8, .2, 1);
   --gutter: max(96px, env(safe-area-inset-left));
@@ -747,3 +749,31 @@ body:has(.m-dock) .m-toasts { bottom: calc(132px + env(safe-area-inset-bottom));
   .m-bars.is-on i { animation: none !important; height: 8px; }
   .m-dock-spin { animation: none !important; border-right-color: currentColor; opacity: .6; }
 }
+
+/* Display type and landing hero */
+.m-h2, .m-h2-r, .m-hero-title { font-family: var(--display); }
+.m-h2 { font-weight: 800; letter-spacing: -.04em; }
+.m-h2-r { font-weight: 800; letter-spacing: -.035em; }
+.m-hero { background: radial-gradient(1000px 560px at 50% 30%, var(--forest-2), var(--forest) 72%); }
+.m-hero-title { font-size: clamp(48px, 6.4vw, 88px); line-height: .95; font-weight: 850; letter-spacing: -.055em; }
+.m-hero-title span { color: var(--mint); }
+.m-rail-caption { display: flex; align-items: center; gap: 10px; font: 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: rgba(255,248,236,.6); }
+.m-rail-caption span { display: inline-block; width: 22px; height: 2px; background: var(--mint); }
+.m-rail-words { font-family: var(--mono); white-space: pre; }
+.m-hero-rail-in { animation: m-rail-in .5s ease-out both; }
+@keyframes m-rail-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .m-hero-rail-in { animation: none; } }
+@media (max-width: 640px) {
+  .m-hero-title { font-size: clamp(42px, 12vw, 60px); }
+  .m-rail-caption { font-size: 10px; margin-right: 16px; }
+}
+
+/* Accent: lilac marks "you are here" and the live point, apart from the category colors */
+.m-hero-stats a { color: var(--lilac); }
+.m-rail-caption span { background: var(--lilac); }
+.m-search:focus-within { outline-color: var(--lilac); }
+.m-bar-nav > [aria-current] { text-decoration-color: var(--lilac); }
+.m-bar-light .m-bar-nav > [aria-current] { text-decoration-color: var(--lilac-ink); }
+.m-tabs a::after { background: var(--lilac-ink); }
+.m-eyebrow { color: var(--lilac-ink); }
+.m-hero .m-eyebrow, .m-rhero .m-eyebrow { color: var(--lilac); }

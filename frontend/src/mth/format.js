@@ -107,6 +107,32 @@ export function parseOutlookRange(text) {
 
 // Smooth price line: a monotone cubic, flat at each high and low as in the design, but without
 // a flat step at every close, so text riding the line doesn't bunch up at each day.
+// One short sentence from a quote, for the words that run along the landing price line.
+export function railQuote(quote, max = 96) {
+  const text = (quote || "").replace(/\s+/g, " ").trim();
+  const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] || text;
+  if (sentence.length <= max) return sentence;
+  const cut = sentence.slice(0, max);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max * 0.6)).replace(/[,;:]$/, "")}…`;
+}
+
+const RAIL_ORDER = ["performance", "opportunities", "risks", "guidance"];
+
+// Up to four quotes, one per category first, so the line reads results, opportunity, risk, guidance.
+export function railQuotes(findings = []) {
+  const quotes = [];
+  const add = (finding) => quotes.push({ category: finding.category, label: CATEGORIES[finding.category]?.label.toUpperCase() || "NOTE", quote: railQuote(finding.citations[0].quote), findingId: finding.id });
+  for (const category of RAIL_ORDER) {
+    const finding = findings.find((item) => item.category === category && item.citations?.[0]?.quote);
+    if (finding) add(finding);
+  }
+  for (const finding of findings) {
+    if (quotes.length >= 4) break;
+    if (finding.citations?.[0]?.quote && !quotes.some((item) => item.findingId === finding.id)) add(finding);
+  }
+  return quotes;
+}
+
 export function priceGeometry(prices, { left, right, top, bottom }) {
   const values = prices.map((item) => item.price).filter(Number.isFinite);
   if (values.length < 2) return null;
