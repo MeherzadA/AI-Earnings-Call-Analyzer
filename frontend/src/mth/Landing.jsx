@@ -279,7 +279,7 @@ export default function Landing({ history, total, historyState, names, onNames, 
       <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={onLibrary} />
       <div className="m-hero-center">
         <h1 className="m-hero-title">Find an <span>earnings call.</span></h1>
-        <p className="m-hero-sub">Search by company name or ticker. Saved reports open right away. A new call takes about 40 seconds to analyze.</p>
+        <p className="m-hero-sub">Search by company name or ticker.</p>
         <SearchBox history={history} names={names} onOpen={onOpen} onAnalyze={onAnalyze} onNames={onNames} onCompany={followSearch} />
         {slow && <p className="m-wake" role="status" aria-live="polite"><span className="m-wake-dot" aria-hidden="true" />Waking the app up. After some time away this takes a few seconds; your reports will appear on their own.</p>}
         {ready.length > 0 && <p className="m-hero-stats">{ready.length} saved reports across {companies} companies · <a href="?view=library" onClick={(event) => { event.preventDefault(); onLibrary(); }}>Browse the library</a></p>}
