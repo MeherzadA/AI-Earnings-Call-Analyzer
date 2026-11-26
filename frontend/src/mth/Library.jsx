@@ -39,7 +39,7 @@ export default function LibraryPage({ history, total, state, names, company, onC
   const title = company ? companyName(company, names) : "Library";
 
   return <div className="m-libpage">
-    <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
+    <AppBar variant="light" current="library" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <header className="m-libpage-head">
       <nav className="m-crumbs" aria-label="Breadcrumb">
         <a href="?" onClick={(event) => { event.preventDefault(); onHome(); }}>Home</a>
@@ -53,7 +53,7 @@ export default function LibraryPage({ history, total, state, names, company, onC
       </div>
       <p className="m-libpage-sub">
         {company ? `${groups[0]?.items.length ?? 0} saved ${groups[0]?.items.length === 1 ? "report" : "reports"}. Search for ${title} to analyze another quarter.`
-          : `${ready.length} saved reports across ${companyCount} companies. Opening one is instant.`}
+          : `${ready.length} saved reports across ${companyCount} companies. Each opens right away.`}
       </p>
       <div className="m-libpage-tools">
         <label className="m-libpage-filter"><span className="sr-only">Filter reports</span>

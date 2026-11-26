@@ -6,15 +6,15 @@ import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, modKey } fr
 const today = () => new Date().toISOString().slice(0, 10);
 const YEARS_SHOWN = 3;
 
-export function AppBar({ variant = "landing", onHome, onCommand, onLibrary }) {
+export function AppBar({ variant = "landing", current, onHome, onCommand, onLibrary }) {
   const mod = modKey();
   return <header className={`m-bar m-bar-${variant}`}>
     <a className="m-brand" href="?" onClick={(event) => { event.preventDefault(); onHome(); }}>Earnings Analyzer</a>
-    {variant === "report" && <button type="button" className="m-bar-search" onClick={onCommand}>
-      <span>Search a call</span><Kbd dark label={`${mod} K`}>{mod === "⌘" ? "⌘K" : "Ctrl K"}</Kbd>
+    {variant !== "landing" && <button type="button" className="m-bar-search" onClick={onCommand}>
+      <span>Search a call</span><Kbd dark={variant !== "light"} label={`${mod} K`}>{mod === "⌘" ? "⌘K" : "Ctrl K"}</Kbd>
     </button>}
     <nav className="m-bar-nav" aria-label="Main">
-      <button type="button" onClick={onLibrary}>Library</button>
+      <a href="?view=library" aria-current={current === "library" ? "page" : undefined} onClick={(event) => { event.preventDefault(); onLibrary(); }}>Library</a>
     </nav>
   </header>;
 }
@@ -185,14 +185,14 @@ function Preview({ report, history, names, onPick, onOpen, historyState }) {
       <b>{companyName(report.ticker, names)}</b>
       {siblings.length > 1 && <nav className="m-pill-tabs" aria-label={`${companyName(report.ticker, names)} calls`}>{siblings.map((item) => <button type="button" key={item.report_id} aria-current={item.report_id === report.report_id ? "true" : undefined} onClick={() => onPick(item.report_id)}>{periodLabel(item)}</button>)}</nav>}
       <span className="m-grow" />
-      <button type="button" className="m-win-open" onClick={() => onOpen(report)}>Open the full report →</button>
+      <button type="button" className="m-win-open" onClick={() => onOpen(report)}>Open report</button>
     </div>
     <div className="m-win-grid">
       <div className="m-win-main">
         <p className="m-win-lede">{findings[0].observation}</p>
         <div className="m-win-mets">{report.research.financial_highlights.slice(0, 4).map((metric) => <div className="m-met" key={metric.id}><b>{metric.value.length > 12 ? (parseMoney(metric.value) ? money(parseMoney(metric.value)) : metric.value.replace(/ year over year/i, " y/y")) : metric.value}</b><small>{metric.label}<span>{metric.citations[0].passage_id}</span></small></div>)}</div>
         <div className="m-win-finds">
-          <p className="m-eyebrow">{findings.length} findings</p>
+          <p className="m-eyebrow">Findings</p>
           {findings.slice(0, 5).map((finding, index) => <div key={finding.id} className={`m-pfind ${index === open ? "is-open" : ""}`}>
             <button type="button" aria-expanded={index === open} onClick={() => setSelected(index === open ? -1 : index)}>
               <CategoryChip category={finding.category} /><span className="m-pfind-head">{finding.headline}</span><span className="m-src">{finding.citations[0].passage_id} ✓</span>
@@ -203,14 +203,14 @@ function Preview({ report, history, names, onPick, onOpen, historyState }) {
       </div>
       <div className="m-win-side">
         <div className="m-card">
-          <p className="m-eyebrow">After the call</p>
+          <p className="m-eyebrow">Stock after the call</p>
           <Spark prices={prices.slice(0, 7)} stroke={(returnAt(report, prices, 5) ?? 0) < 0 ? "#C2492B" : "#1E7A46"} dot={(returnAt(report, prices, 5) ?? 0) < 0 ? "#C2492B" : "#1E7A46"} height={96} />
           <div className="m-card-pair">
             {[["Next day", 1], ["5 days", 5]].map(([label, session]) => { const value = returnAt(report, prices, session); return <span key={label}><small>{label}</small><b className={`m-num m-move-${moveTone(value)}`}>{signedPct(value)}</b></span>; })}
           </div>
         </div>
         <div className="m-card">
-          <p className="m-eyebrow">Tone · the model’s read</p>
+          <p className="m-eyebrow">Tone (model’s reading)</p>
           <div className="m-gauge" role="img" aria-label={`Tone: ${report.research.management_tone}, as read by the model`}><span style={{ left: `${tone}%` }} /></div>
           <div className="m-gauge-scale"><span>Cautious</span><b>{report.research.management_tone[0].toUpperCase() + report.research.management_tone.slice(1)}</b></div>
         </div>
@@ -228,9 +228,9 @@ function Library({ history, total, state, names, onOpen, onRetry, onLibrary, lib
   const visible = filterLibrary(items, filter, query, names).slice(0, 8);
   return <section className="m-library" ref={libraryRef} id="library" aria-labelledby="library-title">
     <div className="m-section-head">
-      <div><p className="m-eyebrow m-eyebrow-mint">The library</p><h2 className="m-h2" id="library-title">Saved reports.</h2></div>
+      <div><h2 className="m-h2" id="library-title">Recent reports</h2><p className="m-section-lede m-section-lede-dark">Already analyzed, so they open right away.</p></div>
       <div className="m-lib-tools">
-        <label className="m-lib-filter"><span className="sr-only">Filter the library</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by company or period" /></label>
+        <label className="m-lib-filter"><span className="sr-only">Filter the library</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter by company or quarter" /></label>
         <div className="m-chips" role="group" aria-label="Filter by next-day move">
           {[["all", `All ${items.length}`], ["fell", `Fell next day · ${fell}`], ["rose", `Rose next day · ${rose}`]].map(([id, label]) => <button type="button" key={id} aria-pressed={filter === id} className="m-chip" onClick={() => setFilter(id)}>{label}</button>)}
         </div>
@@ -246,23 +246,25 @@ function Library({ history, total, state, names, onOpen, onRetry, onLibrary, lib
       </a>)}
     </div>
     {state === "ready" && !visible.length && <p className="m-lib-status">{items.length ? "Nothing matches that filter." : "No reports yet. Search for a company above to start."}</p>}
-    <p className="m-lib-foot">Move = next-day close vs. call-day close. <a href="?view=library" className="m-lib-all" onClick={(event) => { event.preventDefault(); onLibrary(); }}>See all {items.length} saved reports by company</a></p>
+    <p className="m-lib-foot">Percentages are the next-day stock move. <a href="?view=library" className="m-lib-all" onClick={(event) => { event.preventDefault(); onLibrary(); }}>Browse all {items.length} reports by company</a></p>
   </section>;
 }
 
 export default function Landing({ history, total, historyState, names, onNames, onOpen, onAnalyze, onCommand, onLibrary, onRetry }) {
   const [featured, setFeaturedId] = useFeatured(history);
   const libraryRef = useRef(null);
-  const mod = modKey();
+  const ready = history.filter((item) => item.has_research);
+  const companies = new Set(ready.map((item) => item.ticker)).size;
   const prices = (featured?.daily_prices || []).slice(0, 7);
-  const scrollTo = (ref) => ref.current?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   return <div className="m-landing">
     <section className={`m-hero ${featured ? "" : "m-hero-no-chart"}`}>
       <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={onLibrary} />
       <div className="m-hero-center">
-        <h1 className="m-hero-title">Review an earnings call.</h1>
-        <p className="m-hero-sub">Search a company or ticker to open a report or analyze a past call.</p>
+        <h1 className="m-hero-title">Find an earnings call</h1>
+        <p className="m-hero-sub">Search by company name or ticker. Saved reports open right away. A new call takes about 40 seconds to analyze.</p>
         <SearchBox history={history} names={names} onOpen={onOpen} onAnalyze={onAnalyze} onNames={onNames} />
+        {ready.length > 0 && <p className="m-hero-stats">{ready.length} saved reports across {companies} companies · <a href="?view=library" onClick={(event) => { event.preventDefault(); onLibrary(); }}>Browse the library</a></p>}
+        {historyState === "error" && <p className="m-hero-stats" role="status">Saved reports couldn’t load. Search still works.</p>}
       </div>
       <div className="m-hero-rail">
         {featured ? <>
@@ -275,31 +277,11 @@ export default function Landing({ history, total, historyState, names, onNames, 
 
     <section className="m-what" aria-labelledby="what-title">
       <div className="m-section-head">
-        <div><p className="m-eyebrow m-eyebrow-green">Report contents</p><h2 className="m-h2" id="what-title">Call findings and results.</h2></div>
-        <p className="m-section-lede">Review financial results, cited findings, and price changes after the call.</p>
+        <div><h2 className="m-h2" id="what-title">What a report shows</h2></div>
+        <p className="m-section-lede">{featured ? `This is ${companyName(featured.ticker, names)}’s ${periodLabel(featured)} call. ` : ""}Each report has the key findings with their quotes, the figures management gave, guidance against results, and the stock move afterwards.</p>
       </div>
       <div className="m-what-stage">
         <Preview report={featured} history={history} names={names} onPick={setFeaturedId} onOpen={onOpen} historyState={historyState} />
-      </div>
-    </section>
-
-    <section className="m-instant" aria-labelledby="instant-title">
-      <p className="m-eyebrow m-eyebrow-green">How it works</p>
-      <h2 className="m-h2" id="instant-title">From transcript to report.</h2>
-      <div className="m-feats">
-        <div className="m-feat">
-          <b>Saved calls</b>
-          <span className="m-feat-note">Open a report from the library without running the analysis again.</span>
-        </div>
-        <div className="m-feat">
-          <b>New calls</b>
-          <span className="m-feat-note">We find a transcript, check each quote and number, then save the report.</span>
-        </div>
-        <div className="m-feat">
-          <b>Keyboard shortcuts</b>
-          <span className="m-feat-note"><Kbd>{mod === "⌘" ? "⌘K" : "Ctrl K"}</Kbd> to search; <Kbd>J</Kbd> and <Kbd>K</Kbd> to move between findings.</span>
-          <button type="button" className="m-feat-cmd" onClick={onCommand}>Search calls</button>
-        </div>
       </div>
     </section>
 

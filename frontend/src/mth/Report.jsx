@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
 import { companyName, highlightPeriod, markRange, modelLabel, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
-import { CategoryChip, CompanyLogo, Kbd, PriceChart, PublisherIcon, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
+import { CategoryChip, CompanyLogo, Kbd, PriceChart, PublisherIcon, Skeleton, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
 import { AppBar, SiteFooter } from "./Landing.jsx";
 
 export function useNarrow(query = "(max-width: 999px)") {
@@ -32,10 +32,10 @@ export function FindingCard({ finding, selected, onSelect, onCite, style, cardRe
   return <article ref={cardRef} className={`m-find ${selected ? "is-selected" : ""}`} style={style} tabIndex={0} onClick={() => onSelect?.()} onKeyDown={(event) => {
     if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect?.(); }
   }} aria-current={selected ? "true" : undefined}>
-    <span className="m-find-top"><CategoryChip category={finding.category} /><span className="m-mono m-find-id">{finding.id}</span></span>
+    <span className="m-find-top"><CategoryChip category={finding.category} /></span>
     <h3>{finding.headline}</h3>
     <p>{finding.interpretation || finding.observation}</p>
-    <span className="m-find-cites">{finding.citations.map((citation, index) => <button type="button" key={index} className="m-cite" onClick={(event) => { event.stopPropagation(); onCite(citation, index); }} aria-label={`Read passage ${citation.passage_id.slice(1)}, the source for: ${finding.headline}`}>{citation.passage_id} · ✓ word for word</button>)}</span>
+    <span className="m-find-cites">{finding.citations.map((citation, index) => <button type="button" key={index} className="m-cite" onClick={(event) => { event.stopPropagation(); onCite(citation, index); }} aria-label={`Read passage ${citation.passage_id.slice(1)}, the source for: ${finding.headline}`}>Passage {citation.passage_id.slice(1)}</button>)}</span>
   </article>;
 }
 
@@ -69,18 +69,6 @@ export function SourcePanel({ passages, citation, offset = 0, onOffset, onOpenTr
       {onOpenTranscript && <button type="button" className="m-linkish m-source-open" onClick={() => onOpenTranscript(passage?.id || citation.passage_id)}>Open in transcript →</button>}
     </div>
   </div>;
-}
-
-export function AfterCard({ report, prices, onClick, loading }) {
-  const next = returnAt(report, prices, 1), fifth = returnAt(report, prices, 5);
-  const down = (fifth ?? next ?? 0) < 0;
-  return <a className="m-after" href="#stock" onClick={(event) => { event.preventDefault(); onClick?.(); }}>
-    <span className="m-after-top"><span className="m-eyebrow">After the call</span><span className="m-mono">{prices.length > 1 ? `${prices.length - 1} trading days ↓` : loading ? "Pulling prices…" : "No prices"}</span></span>
-    {prices.length > 1 ? <Spark prices={prices} stroke="#0F3B2C" dot={down ? "#C2321A" : "#1E7A46"} height={80} /> : <Skeleton height={80} radius={12} />}
-    <span className="m-after-pair">
-      {[["Next day", next], ["5 days", fifth]].map(([label, value]) => <span key={label}><small className="m-mono">{label.toUpperCase()}</small><b className={`m-num m-move-${moveTone(value)}`}>{prices.length > 1 || value != null ? signedPct(value) : "—"}</b></span>)}
-    </span>
-  </a>;
 }
 
 export function TranscriptDrawer({ passages, error, focus, citations, onClose, title }) {
@@ -135,7 +123,7 @@ function PromiseChart({ chart, report }) {
           const delta = prior.actual == null ? "" : prior.actual > prior.high ? `+${money(prior.actual - prior.high)} above the top` : prior.actual < prior.low ? `−${money(prior.low - prior.actual)} below the bottom` : "inside the range";
           const labelRight = end != null && end < width - 200;
           return <g key={row} className="m-promise-row">
-            <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`${periodLabel(report)} · PROMISED ON THE ${previous ? `Q${previous.quarter}` : "PREVIOUS"} CALL`}</text>
+            <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`${periodLabel(report)} · GUIDANCE FROM THE ${previous ? `Q${previous.quarter}` : "PREVIOUS"} CALL`}</text>
             <rect x={x(prior.low)} y={top + 20} width={Math.max(6, x(prior.high) - x(prior.low))} height="36" rx="10" fill="rgba(182,245,201,.22)" stroke="#B6F5C9" strokeWidth="1.5" className="m-grow-x" />
             {!narrow && <text x={(x(prior.low) + x(prior.high)) / 2} y={top + 43} textAnchor="middle" className="m-mono" fontSize="13" fontWeight="700" fill="#B6F5C9">{`${money(prior.low).replace(/[BMT]$/, "")}–${money(prior.high).slice(1)}`}</text>}
             {end != null && <>
@@ -147,21 +135,21 @@ function PromiseChart({ chart, report }) {
           </g>;
         }
         return <g key={row}>
-          <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`NEXT QUARTER · PROMISED ON THIS CALL`}</text>
+          <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`NEXT QUARTER · GUIDANCE FROM THIS CALL`}</text>
           <rect x={x(next.low)} y={top + 20} width={Math.max(6, x(next.high) - x(next.low))} height="36" rx="10" fill="none" stroke="#FFF8EC" strokeOpacity=".6" strokeWidth="1.5" strokeDasharray="5 5" />
           {!narrow && <text x={(x(next.low) + x(next.high)) / 2} y={top + 43} textAnchor="middle" className="m-mono" fontSize="13" fontWeight="700" fill="#FFF8EC">{`${money(next.low).replace(/[BMT]$/, "")}–${money(next.high).slice(1)}`}</text>}
-          {!narrow && x(next.low) > 330 && <text x={x(next.low) - 12} y={top + 43} textAnchor="end" className="m-mono" fontSize="12" fill="rgba(255,248,236,.55)">checked when that call is read →</text>}
+          {!narrow && x(next.low) > 330 && <text x={x(next.low) - 12} y={top + 43} textAnchor="end" className="m-mono" fontSize="12" fill="rgba(255,248,236,.55)">not reported yet</text>}
         </g>;
       })}
     </svg>
     {narrow && <ul className="m-promise-legend m-mono">
-      {prior && <li>Promised: {money(prior.low)}–{money(prior.high)}{prior.actual != null && <> · Reported: <b>{money(prior.actual)}</b></>}</li>}
-      {next && <li>Next quarter: {money(next.low)}–{money(next.high)}, checked when that call is read</li>}
+      {prior && <li>Guidance: {money(prior.low)}–{money(prior.high)}{prior.actual != null && <> · Reported: <b>{money(prior.actual)}</b></>}</li>}
+      {next && <li>Next quarter: {money(next.low)}–{money(next.high)}, not reported yet</li>}
     </ul>}
   </div>;
 }
 
-const SECTIONS = [["findings", "Findings"], ["numbers", "Numbers"], ["promise", "Promise vs. delivery"], ["stock", "Stock"], ["headlines", "Headlines"]];
+const SECTIONS = [["findings", "Findings"], ["numbers", "Figures"], ["promise", "Guidance"], ["stock", "Stock"], ["headlines", "News"]];
 
 export default function Report({ report: initial, history, names, onOpen, onHome, onCommand, initialPassage }) {
   const toast = useToast();
@@ -302,18 +290,16 @@ export default function Report({ report: initial, history, names, onOpen, onHome
           </div>
         </div>
       </div>
-      <div className="m-rhero-grid">
-        <div>
-          <p className="m-eyebrow m-eyebrow-mint">The short version</p>
-          {version ? <p className="m-short">{version.before}{version.mark && <span>{version.mark}</span>}{version.after}</p> : <Skeleton height={48} />}
-          {contextState === "loading" && !report.context && <p className="m-short-note m-mono">Checking last quarter’s promise…</p>}
-          <div className="m-chipds">
-            <span className="m-chipd"><span className={`m-tone-dot m-tone-${research.management_tone}`} />Tone: {research.management_tone} <span className="m-chipd-dim">· the model’s read</span></span>
-            <span className="m-chipd">{findings.length} findings · {highlights.length} numbers</span>
-            {checks && <span className="m-chipd m-chipd-mint">✓ Every quote found word for word</span>}
-          </div>
-        </div>
-        <AfterCard report={report} prices={prices} loading={priceState === "loading"} onClick={() => goTo("stock")} />
+      <div className="m-rhero-summary">
+        {version ? <p className="m-short">{version.before}{version.mark && <span>{version.mark}</span>}{version.after}</p> : <Skeleton height={48} />}
+        {contextState === "loading" && !report.context && <p className="m-short-note">Loading last quarter’s guidance…</p>}
+        <dl className="m-facts">
+          <div><dt>Tone</dt><dd><span className={`m-tone-dot m-tone-${research.management_tone}`} />{research.management_tone[0].toUpperCase() + research.management_tone.slice(1)}<small>model’s reading</small></dd></div>
+          {[["Next day", 1], ["After 5 days", 5]].map(([label, session]) => {
+            const value = prices.length > session ? returnAt(report, prices, session) : session === 1 ? report.return_1day : report.return_5day;
+            return <div key={label}><dt>{label}</dt><dd><a href="#stock" className={`m-move-${moveTone(value)}-ink`} onClick={(event) => { event.preventDefault(); goTo("stock"); }}>{value == null ? "—" : signedPct(value)}</a></dd></div>;
+          })}
+        </dl>
       </div>
     </section>
 
@@ -330,24 +316,24 @@ export default function Report({ report: initial, history, names, onOpen, onHome
 
     <section className="m-findings" id="findings" aria-labelledby="findings-title">
       <div className="m-findings-list">
-        <p className="m-eyebrow m-eyebrow-green">What mattered</p>
-        <h2 className="m-h2-r" id="findings-title">{findings.length === 1 ? "One finding" : `${["Zero", "One", "Two", "Three", "Four", "Five", "Six"][findings.length] || findings.length} findings`}, each with its line.</h2>
+        <div className="m-shead">
+          <h2 className="m-h2-r" id="findings-title">Key findings</h2>
+          <p>Each one links to the passage it came from. Pick a finding to read its source.</p>
+        </div>
         {findings.map((item, index) => <FindingCard key={item.id} finding={item} selected={index === selected} cardRef={(node) => { cards.current[index] = node; }}
           onSelect={() => narrow ? openCite(index, 0, item.citations[0]) : select(index)} onCite={(c, i) => openCite(index, i, c)} style={{ "--i": index }} />)}
-        {!findings.some((item) => item.category === "risks") && <p className="m-muted">No risk finding was kept. That doesn’t mean the call had none; this isn’t a complete risk assessment.</p>}
+        {!findings.some((item) => item.category === "risks") && <p className="m-muted">No risks were flagged. That doesn’t mean the call had none.</p>}
       </div>
-      <aside className="m-findings-aside" aria-label="Source passage">
-        {citation && !narrow && <SourcePanel passages={transcript.passages} citation={citation} offset={offset} onOffset={setOffset} error={transcript.error} onOpenTranscript={(focus) => setDrawer({ focus })} />}
-        <div className="m-checks">
-          <b>How these were checked</b>
-          {checks ? `${checks.findings_retained} of ${checks.findings_checked} findings and ${checks.highlights_retained} of ${checks.highlights_checked} numbers kept after matching against the transcript. ${checks.human_review === "not_reviewed" ? "Not reviewed by a person. " : ""}A matching quote shows it was said, not that the reading of it is right.` : "Each quote was matched against the saved transcript. A matching quote shows it was said, not that the reading of it is right."}
-        </div>
-      </aside>
+      {!narrow && <aside className="m-findings-aside" aria-label="Source passage">
+        {citation && <SourcePanel passages={transcript.passages} citation={citation} offset={offset} onOffset={setOffset} error={transcript.error} onOpenTranscript={(focus) => setDrawer({ focus })} />}
+      </aside>}
     </section>
 
     <section className="m-numbers" id="numbers" aria-labelledby="numbers-title">
-      <p className="m-eyebrow m-eyebrow-green">The numbers they gave</p>
-      <h2 className="m-h2-r" id="numbers-title">{highlights.length ? `${["No", "One figure", "Two figures", "Three figures", "Four figures"][highlights.length] || `${highlights.length} figures`}, straight from the call.` : "No figures passed the checks."}</h2>
+      <div className="m-shead">
+        <h2 className="m-h2-r" id="numbers-title">Figures from the call</h2>
+        <p>{highlights.length ? "As management stated them, with the quote each one came from." : "No figures could be matched to the transcript."}</p>
+      </div>
       <div className="m-tiles">
         {highlights.map((metric) => {
           const period = highlightPeriod(research, metric);
@@ -366,24 +352,23 @@ export default function Report({ report: initial, history, names, onOpen, onHome
 
     <section className="m-promise-wrap" id="promise" aria-labelledby="promise-title">
       <div className="m-promise">
-        <p className="m-eyebrow m-eyebrow-mint">Promise vs. delivery</p>
         <div className="m-promise-head">
-          <h2 className="m-h2-r" id="promise-title">Did they hit what they said they would?</h2>
-          {comparison?.outlook?.quote && <p>Last call, management said: <span className="m-mono m-cream">“{comparison.outlook.quote}”</span> <span className="m-mono m-mint m-small">{report.context.previous_call ? `Q${report.context.previous_call.quarter} FY${String(report.context.previous_call.year).slice(-2)}` : ""} · {comparison.outlook.passage_id}</span></p>}
+          <h2 className="m-h2-r" id="promise-title">Guidance vs. results</h2>
+          {comparison?.outlook?.quote && <p>On the previous call, management said: <span className="m-mono m-cream">“{comparison.outlook.quote}”</span> <span className="m-mono m-mint m-small">{report.context.previous_call ? `Q${report.context.previous_call.quarter} FY${String(report.context.previous_call.year).slice(-2)}` : ""} · {comparison.outlook.passage_id}</span></p>}
         </div>
         {!report.context && contextState === "loading" && <div className="m-promise-skel"><Skeleton height={36} width="40%" radius={10} /><Skeleton height={36} width="55%" radius={10} /></div>}
         {!report.context && contextState === "error" && <p className="m-promise-msg">Last quarter’s outlook couldn’t be loaded right now. The rest of the report is unaffected.</p>}
         {chart && <PromiseChart chart={chart} report={report} />}
         {report.context && !chart?.prior && comparison?.status !== "compared" && <p className="m-promise-msg">{comparison?.status === "directional" ? comparison.message : comparison?.message || "No fair forecast-to-result comparison is available for this call."}</p>}
         {report.context?.additional_comparisons?.length > 0 && <ul className="m-also">{report.context.additional_comparisons.map((item) => <li key={item.metric}><b>{item.headline}</b><span className="m-mono">Expected {item.expected.toLowerCase()} · reported {item.reported?.value}</span></li>)}</ul>}
-        <p className="m-promise-foot">{comparison?.limitation || "Compares stated, possibly rounded figures."} This is management’s own outlook, not analyst consensus.</p>
+        <p className="m-promise-foot">{comparison?.limitation || "Compares stated, possibly rounded figures."} This is the company’s own guidance, not analyst estimates.</p>
       </div>
     </section>
 
     <section className="m-stock" id="stock" ref={stockRef} aria-labelledby="stock-title">
-      <div className="m-stock-head">
+      <div className="m-shead">
         <h2 className="m-h2-r" id="stock-title">Stock price after the call</h2>
-        <span className="m-muted">{prices.length > 1 ? `Daily closes for ${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"}. ` : ""}Shown next to the call, not as cause and effect.</span>
+        <p>{prices.length > 1 ? `Daily closes for ${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"}. ` : ""}The call may not be the reason for the move.</p>
       </div>
       <div className="m-stock-card">
         {priceState === "loading" && <p className="m-stock-status" role="status">Loading more trading days…</p>}
@@ -406,9 +391,9 @@ export default function Report({ report: initial, history, names, onOpen, onHome
     </section>
 
     <section className="m-headlines" id="headlines" aria-labelledby="headlines-title">
-      <div className="m-section-head m-section-head-tight">
-        <div><p className="m-eyebrow m-eyebrow-green">Headlines around the call</p><h2 className="m-h2-r" id="headlines-title">{news?.end ? `What the news said up to ${shortDate(news.end, false)}.` : "What the news said."}</h2></div>
-        <span className="m-muted m-headlines-note">Links only. We didn’t read or verify these articles, and same-day stories may be from after the call.</span>
+      <div className="m-shead">
+        <h2 className="m-h2-r" id="headlines-title">News before the call</h2>
+        <p>{news?.end ? `Headlines up to ${shortDate(news.end, false)}. ` : ""}Links to outside articles we haven’t checked. Same-day stories may be from after the call.</p>
       </div>
       <div className="m-news-list">
         {!news && contextState === "loading" && Array.from({ length: 4 }, (_, i) => <div key={i} className="m-news is-skeleton"><Skeleton width={110} height={12} /><Skeleton height={16} /><Skeleton width={80} height={12} /></div>)}
@@ -420,7 +405,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
 
     <section className="m-method" aria-labelledby="method-title">
       <h2 id="method-title">How this report was made</h2>
-      <p>{modelLabel(research.model)} read the call transcript{research.generated_at ? ` on ${shortDate(research.generated_at)}` : ""} and wrote the findings. Every quote and number was then matched word for word against the transcript. Tone is the model’s reading, not a fact.</p>
+      <p>{modelLabel(research.model)} read the call transcript{research.generated_at ? ` on ${shortDate(research.generated_at)}` : ""} and wrote the findings. Every quote and number was then matched word for word against the transcript{checks ? `, which kept ${checks.findings_retained} of ${checks.findings_checked} findings and ${checks.highlights_retained} of ${checks.highlights_checked} figures` : ""}. A matching quote shows it was said, not that the reading of it is right. Tone is the model’s reading, not a fact.{checks?.human_review === "not_reviewed" ? " No person reviewed this report." : ""}</p>
       <details>
         <summary>Technical details</summary>
         <dl>

@@ -15,7 +15,7 @@ function ReportSkeleton({ onHome, onCommand }) {
     <section className="m-rhero" role="status" aria-label="Opening the report">
       <Skeleton width={180} height={12} className="m-skel-dark" />
       <div className="m-rhero-top"><Skeleton width={76} height={76} radius={20} className="m-skel-dark" /><div className="m-rhero-title"><Skeleton width={340} height={52} className="m-skel-dark" /><Skeleton width={260} height={14} className="m-skel-dark" /></div></div>
-      <div className="m-rhero-grid"><div><Skeleton width={160} height={12} className="m-skel-dark" /><Skeleton height={44} className="m-skel-dark" style={{ marginTop: 14 }} /><Skeleton height={44} width="70%" className="m-skel-dark" style={{ marginTop: 10 }} /></div><div className="m-after is-skeleton"><Skeleton height={14} width="50%" /><Skeleton height={80} radius={12} /><Skeleton height={56} radius={14} /></div></div>
+      <div className="m-rhero-summary"><Skeleton height={44} className="m-skel-dark" /><Skeleton height={44} width="70%" className="m-skel-dark" style={{ marginTop: 10 }} /></div>
     </section>
     <section className="m-findings"><div className="m-findings-list">{[0, 1, 2].map((i) => <div key={i} className="m-find is-skeleton"><Skeleton width={96} height={22} radius={999} /><Skeleton height={22} width="80%" /><Skeleton height={14} /></div>)}</div><aside className="m-findings-aside"><div className="m-source m-source-wait"><Skeleton height={12} width="40%" className="m-skel-dark" /><Skeleton height={12} className="m-skel-dark" /><Skeleton height={12} className="m-skel-dark" /></div></aside></section>
   </div>;
