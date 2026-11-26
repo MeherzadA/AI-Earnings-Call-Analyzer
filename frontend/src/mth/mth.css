@@ -777,3 +777,4 @@ body:has(.m-dock) .m-toasts { bottom: calc(132px + env(safe-area-inset-bottom));
 .m-tabs a::after { background: var(--lilac-ink); }
 .m-eyebrow { color: var(--lilac-ink); }
 .m-hero .m-eyebrow, .m-rhero .m-eyebrow { color: var(--lilac); }
+.m-rail-pending { font-style: normal; color: var(--lilac); }

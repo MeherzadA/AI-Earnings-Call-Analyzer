@@ -8,11 +8,12 @@ from threading import Lock
 from queue import Queue, Empty
 from typing import Literal
 from datetime import datetime, timezone
-from time import perf_counter
+from time import perf_counter, time
+from functools import lru_cache
 from sqlalchemy import func, text, tuple_, or_, cast, String
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from fastapi import FastAPI, HTTPException, Depends, Query, Path
+from fastapi import FastAPI, HTTPException, Depends, Query, Path, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
@@ -21,11 +22,11 @@ from database import engine, get_db, SessionLocal
 
 import models
 
-from transcript import fetch_transcript, available_calls, search_companies, company_name, company_names
+from transcript import fetch_transcript, fetch_paragraphs, call_quotes, available_calls, search_companies, company_name, company_names
 
 from analysis import analyze_transcript
 
-from prices import get_stock_returns
+from prices import calculate_returns, get_stock_returns
 from research import legacy_analysis, source_hash, source_passages
 from context import build_context, fetch_context_sources, CONTEXT_VERSION, context_complete, reporting_scope
 
@@ -147,6 +148,33 @@ def report_by_id(db, report_id):
 @app.get("/reports/{report_id}")
 def read_report(report_id: int, db: Session = Depends(get_db)):
     return report_response(*report_by_id(db, report_id))
+
+
+@lru_cache(maxsize=64)
+def _call_preview(ticker, hour):
+    today = datetime.now(timezone.utc).date().isoformat()
+    calls = [call for call in available_calls(ticker) if call.get("call_date") and call["call_date"][:10] < today]
+    # The newest call may be too fresh for a trading day after it; fall back one quarter.
+    for call in calls[:2]:
+        prices = calculate_returns(ticker, call["call_date"][:10]).get("daily_prices") or []
+        if len(prices) >= 2:
+            quotes = call_quotes(fetch_paragraphs(ticker, call["year"], call["quarter"]))
+            return {"ticker": ticker, "company_name": company_name(ticker), "year": call["year"], "quarter": call["quarter"],
+                    "call_date": call["call_date"][:10], "daily_prices": prices[:8], "quotes": quotes}
+    return None
+
+
+@app.get("/transcripts/{ticker}/preview")
+def call_preview(response: Response, ticker: str = Path(min_length=1, max_length=10, pattern=r"^[A-Za-z][A-Za-z0-9.-]*$")):
+    """The latest call's closing prices and a few verbatim lines, with no model run, for the landing line."""
+    try:
+        preview = _call_preview(ticker.upper(), int(time() // 3600))
+    except RuntimeError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    if not preview:
+        raise HTTPException(status_code=404, detail="No recent call with price history for this company.")
+    response.headers["Cache-Control"] = "public, s-maxage=3600, stale-while-revalidate=86400"
+    return preview
 
 
 @app.post("/reports/{report_id}/prices")

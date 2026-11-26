@@ -267,15 +267,27 @@ export default function Landing({ history, total, historyState, names, onNames, 
     const timer = setTimeout(() => setSlow(true), 2500);
     return () => clearTimeout(timer);
   }, [historyState]);
-  const prices = (featured?.daily_prices || []).slice(0, 7);
-  const quotes = useMemo(() => railQuotes(featured?.research?.findings || []), [featured]);
-  // While someone types, swap the line to that company's latest saved call, if there is one.
+  // While someone types, the line follows that company: its saved report if there is one,
+  // otherwise a light preview of its latest call (closing prices plus verbatim lines).
+  const [preview, setPreview] = useState(null);
+  const [pending, setPending] = useState(null);
+  const wanted = useRef(null);
   const followSearch = (company) => {
+    wanted.current = company.symbol;
     const match = ready.find((item) => item.ticker === company.symbol || (company.name && item.company_name === company.name));
-    if (match) setFeaturedId(match.report_id);
+    if (match) { setPreview(null); setPending(null); setFeaturedId(match.report_id); return; }
+    if (preview?.ticker === company.symbol) return;
+    setPending(company);
+    apiRequest(`/transcripts/${encodeURIComponent(company.symbol)}/preview`, { timeoutMs: 30000 })
+      .then((data) => { if (wanted.current === company.symbol) setPreview({ ...data, report_id: `preview-${data.ticker}` }); })
+      .catch(() => {})
+      .finally(() => { if (wanted.current === company.symbol) setPending(null); });
   };
+  const hero = preview ?? featured;
+  const prices = (hero?.daily_prices || []).slice(0, 7);
+  const quotes = useMemo(() => preview ? (preview.quotes || []) : railQuotes(featured?.research?.findings || []), [preview, featured]);
   return <div className="m-landing">
-    <section className={`m-hero ${featured ? "" : "m-hero-no-chart"}`}>
+    <section className={`m-hero ${hero ? "" : "m-hero-no-chart"}`}>
       <AppBar variant="landing" onHome={() => window.scrollTo({ top: 0 })} onCommand={onCommand} onLibrary={onLibrary} />
       <div className="m-hero-center">
         <h1 className="m-hero-title">Find an <span>earnings call.</span></h1>
@@ -286,9 +298,9 @@ export default function Landing({ history, total, historyState, names, onNames, 
         {historyState === "error" && <p className="m-hero-stats" role="status">Saved reports couldn’t load. Search still works.</p>}
       </div>
       <div className="m-hero-rail">
-        {featured ? <div key={featured.report_id ?? featured.id} className="m-hero-rail-in">
-          <p className="m-rail-caption"><span aria-hidden="true" />{companyName(featured.ticker, names)} after its {periodLabel(featured)} call{quotes.length ? ", in the call’s own words" : ""}</p>
-          {prices.length > 1 ? <QuoteRail prices={prices} quotes={quotes} height={260} label={`${companyName(featured.ticker)} closing price for ${prices.length - 1} trading days after its ${periodLabel(featured)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}.`} />
+        {hero ? <div key={hero.report_id ?? hero.id} className="m-hero-rail-in">
+          <p className="m-rail-caption"><span aria-hidden="true" />{companyName(hero.ticker, names)} after its {periodLabel(hero)} call{quotes.length ? ", in the call’s own words" : ""}{pending && <em className="m-rail-pending" role="status"> · loading {companyName(pending.symbol, names)}…</em>}</p>
+          {prices.length > 1 ? <QuoteRail prices={prices} quotes={quotes} height={260} label={`${companyName(hero.ticker, names)} closing price for ${prices.length - 1} trading days after its ${periodLabel(hero)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}.`} />
             : <p className="m-hero-empty">Closing prices aren’t available for this call. Search for another report above.</p>}
         </div> : <p className="m-hero-empty" role={historyState === "error" ? "status" : undefined}>{historyState === "error" ? "The saved calls couldn’t load. Search by company or ticker above." : historyState === "loading" ? "Loading saved calls…" : "Search for a company or ticker to find a call."}</p>}
       </div>

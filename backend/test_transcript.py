@@ -77,3 +77,21 @@ class TranscriptCoverageChecks(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CallQuoteChecks(unittest.TestCase):
+    def test_picks_verbatim_management_lines_with_figures(self):
+        paragraphs = [
+            ("Operator", "Welcome to the call. Revenue was $10 billion, up 5% year over year."),
+            ("Jane Doe", "Some remarks contain forward-looking statements about 2026 revenue of $5 billion."),
+            ("Sam Lee", "Good morning. Revenue was $94.9 billion, up 8% from a year ago in U.S. dollars. More later."),
+            ("Sam Lee", "We are excited about the road ahead and our people."),
+            ("Kim Park", "Gross margin was 46.5%, at the high end of our range. Thanks."),
+        ]
+        quotes = transcript.call_quotes(paragraphs)
+        self.assertEqual([q["quote"] for q in quotes], [
+            "Revenue was $94.9 billion, up 8% from a year ago in U.S. dollars.",
+            "Gross margin was 46.5%, at the high end of our range.",
+        ])
+        self.assertEqual([q["label"] for q in quotes], ["LEE", "PARK"])
+        self.assertEqual(transcript.call_quotes([]), [])

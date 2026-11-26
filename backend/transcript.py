@@ -207,3 +207,50 @@ def _fetch_transcript(ticker, year, quarter, hour):
         "ticker": ticker.upper(), "quarter": quarter, "year": year,
         "report_date": str(row[0]) if row[0] else None, "content": content,
     }
+
+
+@lru_cache(maxsize=32)
+def _fetch_paragraphs(ticker, year, quarter, hour):
+    rows = _read_rows(
+        "SELECT transcripts FROM read_parquet(?) WHERE symbol = ? AND fiscal_year = ? AND fiscal_quarter = ? LIMIT 1",
+        [TRANSCRIPTS_URL, ticker, year, quarter], hour, timeout=20, retries=1,
+    )
+    return tuple((p.get("speaker") or "", p.get("content") or "") for p in (rows[0][0] or [])) if rows else ()
+
+
+def fetch_paragraphs(ticker: str, year: int, quarter: int) -> list[tuple[str, str]]:
+    """(speaker, text) pairs for one call, in order."""
+    try:
+        return list(_fetch_paragraphs(ticker.upper(), int(year), int(quarter), int(time() // 3600)))
+    except duckdb.Error as exc:
+        raise RuntimeError("The transcript provider is unavailable. Please try again shortly.") from exc
+
+
+# A sentence ends at . ! ? followed by a space and a capital, so "$0.94" and "U.S. sales" stay whole.
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"“])")
+_FIGURE = re.compile(r"\$\s?\d|\d(?:\.\d+)?\s?(?:%|(?:percent|billion|million)\b)", re.I)
+_SKIP = re.compile(r"forward-looking|non-gaap reconciliation|safe harbor|press release|webcast|operator|thank you|welcome", re.I)
+
+
+def call_quotes(paragraphs, limit=4, max_length=150):
+    """Short management sentences with a figure in them, spread across the prepared remarks.
+
+    No model involved: these are verbatim lines, labelled with the speaker's surname.
+    """
+    candidates = []
+    for index, (speaker, text) in enumerate(paragraphs):
+        name = speaker.strip()
+        if not name or name.casefold() == "operator":
+            continue
+        for sentence in _SENTENCE_BREAK.split(" ".join(text.split())):
+            sentence = sentence.strip()
+            if sentence[:1].isupper() and sentence[-1:] in ".!?" and 40 <= len(sentence) <= max_length and _FIGURE.search(sentence) and not _SKIP.search(sentence):
+                candidates.append((index, name, sentence))
+                break  # one per paragraph keeps the voices and topics varied
+    if not candidates:
+        return []
+    # Prepared remarks come first; take evenly spaced picks from the first part of the call.
+    pool = candidates[: max(limit * 3, 1)]
+    step = max(1, len(pool) // limit)
+    picks = pool[::step][:limit]
+    return [{"speaker": name, "label": name.split()[-1].upper(), "quote": sentence} for _, name, sentence in picks]
