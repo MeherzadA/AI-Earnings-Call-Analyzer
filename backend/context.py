@@ -213,8 +213,10 @@ def dated_news(ticker, call_date):
         link = item.findtext("link", "")
         if not start <= published.date() <= end or not link.startswith("https://news.google.com/"):
             continue
+        source = item.find("source")
+        site = source.get("url", "") if source is not None else ""
         items.append({"title": item.findtext("title", "")[:300], "source": item.findtext("source", "Unknown publisher")[:100],
-                      "url": link, "published_at": published.isoformat()})
+                      "site": site[:200] if site.startswith("https://") else "", "url": link, "published_at": published.isoformat()})
     # Source diversity is useful, but is not a claim that any publisher is neutral.
     items.sort(key=lambda item: item["published_at"], reverse=True)
     selected, sources = [], set()

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "../api.js";
-import { companyName, highlightPeriod, markRange, money, moveTone, newsTitle, periodLabel, promiseChart, railQuotes, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
-import { CategoryChip, CompanyLogo, Kbd, QuoteRail, Skeleton, Spark, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
-import { AppBar } from "./Landing.jsx";
+import { companyName, highlightPeriod, markRange, modelLabel, money, moveTone, newsTitle, periodLabel, promiseChart, receiptHash, returnAt, shortDate, shortVersion, signedPct } from "./format.js";
+import { CategoryChip, CompanyLogo, Kbd, PriceChart, PublisherIcon, Skeleton, useElementWidth, useReducedMotion, useToast } from "./ui.jsx";
+import { AppBar, SiteFooter } from "./Landing.jsx";
 import { ListenDock, PlayIcon, useListen } from "./Listen.jsx";
 
 export function useNarrow(query = "(max-width: 999px)") {
@@ -30,11 +30,13 @@ export function Modal({ className = "", label, onClose, children }) {
 }
 
 export function FindingCard({ finding, selected, onSelect, onCite, style, cardRef }) {
-  return <article ref={cardRef} className={`m-find ${selected ? "is-selected" : ""}`} style={style} onClick={() => onSelect?.()} aria-current={selected ? "true" : undefined}>
-    <span className="m-find-top"><CategoryChip category={finding.category} /><span className="m-mono m-find-id">{finding.id}</span></span>
+  return <article ref={cardRef} className={`m-find ${selected ? "is-selected" : ""}`} style={style} tabIndex={0} onClick={() => onSelect?.()} onKeyDown={(event) => {
+    if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); onSelect?.(); }
+  }} aria-current={selected ? "true" : undefined}>
+    <span className="m-find-top"><CategoryChip category={finding.category} /></span>
     <h3>{finding.headline}</h3>
     <p>{finding.interpretation || finding.observation}</p>
-    <span className="m-find-cites">{finding.citations.map((citation, index) => <button type="button" key={index} className="m-cite" onClick={(event) => { event.stopPropagation(); onCite(citation, index); }} aria-label={`Read passage ${citation.passage_id.slice(1)}, the source for: ${finding.headline}`}>{citation.passage_id} · ✓ word for word</button>)}</span>
+    <span className="m-find-cites">{finding.citations.map((citation, index) => <button type="button" key={index} className="m-cite" onClick={(event) => { event.stopPropagation(); onCite(citation, index); }} aria-label={`Read passage ${citation.passage_id.slice(1)}, the source for: ${finding.headline}`}>Passage {citation.passage_id.slice(1)}</button>)}</span>
   </article>;
 }
 
@@ -68,18 +70,6 @@ export function SourcePanel({ passages, citation, offset = 0, onOffset, onOpenTr
       {onOpenTranscript && <button type="button" className="m-linkish m-source-open" onClick={() => onOpenTranscript(passage?.id || citation.passage_id)}>Open in transcript →</button>}
     </div>
   </div>;
-}
-
-export function AfterCard({ report, prices, onClick, loading }) {
-  const next = returnAt(report, prices, 1), fifth = returnAt(report, prices, 5);
-  const down = (fifth ?? next ?? 0) < 0;
-  return <a className="m-after" href="#stock" onClick={(event) => { event.preventDefault(); onClick?.(); }}>
-    <span className="m-after-top"><span className="m-eyebrow">After the call</span><span className="m-mono">{prices.length > 1 ? `${prices.length - 1} trading days ↓` : loading ? "Pulling prices…" : "No prices"}</span></span>
-    {prices.length > 1 ? <Spark prices={prices} stroke="#0F3B2C" dot={down ? "#C2321A" : "#1E7A46"} height={80} /> : <Skeleton height={80} radius={12} />}
-    <span className="m-after-pair">
-      {[["Next day", next], ["5 days", fifth]].map(([label, value]) => <span key={label}><small className="m-mono">{label.toUpperCase()}</small><b className={`m-num m-move-${moveTone(value)}`}>{prices.length > 1 || value != null ? signedPct(value) : "—"}</b></span>)}
-    </span>
-  </a>;
 }
 
 export function TranscriptDrawer({ passages, error, focus, citations, onClose, title, listen }) {
@@ -136,7 +126,7 @@ function PromiseChart({ chart, report }) {
   const label = [prior && `Q${report.quarter} outlook range ${money(prior.low)} to ${money(prior.high)}${prior.actual ? `, actual ${money(prior.actual)}` : ""}.`, next && `Next-quarter outlook range ${money(next.low)} to ${money(next.high)}, not yet reported.`].filter(Boolean).join(" ");
   return <div ref={wrap} className="m-promise-chart">
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label}>
-      {chart.ticks.map((tick) => <g key={tick}><line x1={x(tick)} x2={x(tick)} y1={10} y2={height - 34} stroke="rgba(255,248,236,.08)" /><text x={x(tick)} y={height - 10} textAnchor="middle" className="m-mono" fontSize="12" fill="rgba(255,248,236,.45)">{money(tick)}</text></g>)}
+      {chart.ticks.map((tick) => <g key={tick}><line x1={x(tick)} x2={x(tick)} y1={10} y2={height - 34} stroke="rgba(255,248,236,.08)" /><text x={x(tick)} y={height - 10} textAnchor="middle" className="m-mono" fontSize="12" fill="rgba(255,248,236,.78)">{money(tick)}</text></g>)}
       {rows.map((row, i) => {
         const top = 20 + i * 104;
         if (row === "prior") {
@@ -144,7 +134,7 @@ function PromiseChart({ chart, report }) {
           const delta = prior.actual == null ? "" : prior.actual > prior.high ? `+${money(prior.actual - prior.high)} above the top` : prior.actual < prior.low ? `−${money(prior.low - prior.actual)} below the bottom` : "inside the range";
           const labelRight = end != null && end < width - 200;
           return <g key={row} className="m-promise-row">
-            <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.6)">{`${periodLabel(report)} · PROMISED ON THE ${previous ? `Q${previous.quarter}` : "PREVIOUS"} CALL`}</text>
+            <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`${periodLabel(report)} · GUIDANCE FROM THE ${previous ? `Q${previous.quarter}` : "PREVIOUS"} CALL`}</text>
             <rect x={x(prior.low)} y={top + 20} width={Math.max(6, x(prior.high) - x(prior.low))} height="36" rx="10" fill="rgba(182,245,201,.22)" stroke="#B6F5C9" strokeWidth="1.5" className="m-grow-x" />
             {!narrow && <text x={(x(prior.low) + x(prior.high)) / 2} y={top + 43} textAnchor="middle" className="m-mono" fontSize="13" fontWeight="700" fill="#B6F5C9">{`${money(prior.low).replace(/[BMT]$/, "")}–${money(prior.high).slice(1)}`}</text>}
             {end != null && <>
@@ -156,21 +146,21 @@ function PromiseChart({ chart, report }) {
           </g>;
         }
         return <g key={row}>
-          <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.6)">{`NEXT QUARTER · PROMISED ON THIS CALL`}</text>
+          <text x="0" y={top + 6} className="m-mono" fontSize="12" letterSpacing="1" fill="rgba(255,248,236,.78)">{`NEXT QUARTER · GUIDANCE FROM THIS CALL`}</text>
           <rect x={x(next.low)} y={top + 20} width={Math.max(6, x(next.high) - x(next.low))} height="36" rx="10" fill="none" stroke="#FFF8EC" strokeOpacity=".6" strokeWidth="1.5" strokeDasharray="5 5" />
           {!narrow && <text x={(x(next.low) + x(next.high)) / 2} y={top + 43} textAnchor="middle" className="m-mono" fontSize="13" fontWeight="700" fill="#FFF8EC">{`${money(next.low).replace(/[BMT]$/, "")}–${money(next.high).slice(1)}`}</text>}
-          {!narrow && x(next.low) > 330 && <text x={x(next.low) - 12} y={top + 43} textAnchor="end" className="m-mono" fontSize="12" fill="rgba(255,248,236,.55)">checked when that call is read →</text>}
+          {!narrow && x(next.low) > 330 && <text x={x(next.low) - 12} y={top + 43} textAnchor="end" className="m-mono" fontSize="12" fill="rgba(255,248,236,.55)">not reported yet</text>}
         </g>;
       })}
     </svg>
     {narrow && <ul className="m-promise-legend m-mono">
-      {prior && <li>Promised: {money(prior.low)}–{money(prior.high)}{prior.actual != null && <> · Reported: <b>{money(prior.actual)}</b></>}</li>}
-      {next && <li>Next quarter: {money(next.low)}–{money(next.high)}, checked when that call is read</li>}
+      {prior && <li>Guidance: {money(prior.low)}–{money(prior.high)}{prior.actual != null && <> · Reported: <b>{money(prior.actual)}</b></>}</li>}
+      {next && <li>Next quarter: {money(next.low)}–{money(next.high)}, not reported yet</li>}
     </ul>}
   </div>;
 }
 
-const SECTIONS = [["findings", "Findings"], ["numbers", "Numbers"], ["promise", "Promise vs. delivery"], ["stock", "Stock"], ["headlines", "Headlines"]];
+const SECTIONS = [["findings", "Findings"], ["numbers", "Figures"], ["promise", "Guidance"], ["stock", "Stock"], ["headlines", "News"]];
 
 export default function Report({ report: initial, history, names, onOpen, onHome, onCommand, initialPassage }) {
   const toast = useToast();
@@ -186,6 +176,7 @@ export default function Report({ report: initial, history, names, onOpen, onHome
   const [sheet, setSheet] = useState(null);
   const [drawer, setDrawer] = useState(initialPassage ? { focus: initialPassage } : null);
   const [section, setSection] = useState("findings");
+  const [day, setDay] = useState(null);
   const [listening, setListening] = useState(false);
   const [newsState, setNewsState] = useState("idle");
   const cards = useRef([]);
@@ -308,13 +299,12 @@ export default function Report({ report: initial, history, names, onOpen, onHome
   const comparison = report.context?.comparison;
   const news = report.context?.news;
   const checks = research.checks;
-  const quotes = railQuotes(findings);
   const fiscalNote = report.call_date && Number(report.call_date.slice(0, 4)) !== Number(report.year);
 
   return <div className="m-report">
     <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <section className="m-rhero">
-      <p className="m-crumb m-mono"><a href="?" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a> / {name} / {periodLabel(report)}</p>
+      <nav className="m-crumbs m-crumbs-dark" aria-label="Breadcrumb"><a href="?view=library" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a><span aria-hidden="true">/</span><a href={`?view=library&company=${report.ticker}`} onClick={(event) => { event.preventDefault(); onHome("library", true, report.ticker); }}>{name}</a><span aria-hidden="true">/</span><span aria-current="page">{periodLabel(report)}</span></nav>
       <div className="m-rhero-top">
         <CompanyLogo ticker={report.ticker} size={76} radius={20} className="m-rhero-logo" alt={name} />
         <div className="m-rhero-title">
@@ -324,24 +314,22 @@ export default function Report({ report: initial, history, names, onOpen, onHome
         <div className="m-rhero-actions">
           {siblings.length > 1 && <nav className="m-qswitch" aria-label={`Other ${name} calls`}>{siblings.map((item) => <button type="button" key={item.report_id} aria-current={item.report_id === report.report_id ? "page" : undefined} onClick={() => item.report_id !== report.report_id && onOpen(item)}>{periodLabel(item)}</button>)}</nav>}
           <div className="m-rhero-btns">
-            <button type="button" className="m-btn m-btn-ghost" onClick={copyLink}>Copy link</button>
             <button type="button" className="m-btn m-btn-ghost m-btn-listen" onClick={startListening} aria-pressed={listening && listen.status === "playing"}><PlayIcon status={listening ? listen.status : "idle"} />{listen.mode === "recording" ? "Listen to the call" : "Read it aloud"}</button>
+            <button type="button" className="m-btn m-btn-ghost" onClick={copyLink}>Copy link</button>
             <button type="button" className="m-btn m-btn-mint" onClick={() => setDrawer({ focus: citation?.passage_id })}>Read the transcript</button>
           </div>
         </div>
       </div>
-      <div className="m-rhero-grid">
-        <div>
-          <p className="m-eyebrow m-eyebrow-mint">The short version</p>
-          {version ? <p className="m-short">{version.before}{version.mark && <span>{version.mark}</span>}{version.after}</p> : <Skeleton height={48} />}
-          {contextState === "loading" && !report.context && <p className="m-short-note m-mono">Checking last quarter’s promise…</p>}
-          <div className="m-chipds">
-            <span className="m-chipd"><span className={`m-tone-dot m-tone-${research.management_tone}`} />Tone: {research.management_tone} <span className="m-chipd-dim">· the model’s read</span></span>
-            <span className="m-chipd">{findings.length} findings · {highlights.length} numbers</span>
-            {checks && <span className="m-chipd m-chipd-mint">✓ Every quote found word for word</span>}
-          </div>
-        </div>
-        <AfterCard report={report} prices={prices} loading={priceState === "loading"} onClick={() => goTo("stock")} />
+      <div className="m-rhero-summary">
+        {version ? <p className="m-short">{version.before}{version.mark && <span>{version.mark}</span>}{version.after}</p> : <Skeleton height={48} />}
+        {contextState === "loading" && !report.context && <p className="m-short-note">Loading last quarter’s guidance…</p>}
+        <dl className="m-facts">
+          <div><dt>Tone</dt><dd><span className={`m-tone-dot m-tone-${research.management_tone}`} />{research.management_tone[0].toUpperCase() + research.management_tone.slice(1)}<small>model’s reading</small></dd></div>
+          {[["Next day", 1], ["After 5 days", 5]].map(([label, session]) => {
+            const value = prices.length > session ? returnAt(report, prices, session) : session === 1 ? report.return_1day : report.return_5day;
+            return <div key={label}><dt>{label}</dt><dd><a href="#stock" className={`m-move-${moveTone(value)}-ink`} onClick={(event) => { event.preventDefault(); goTo("stock"); }}>{value == null ? "—" : signedPct(value)}</a></dd></div>;
+          })}
+        </dl>
       </div>
     </section>
 
@@ -358,34 +346,34 @@ export default function Report({ report: initial, history, names, onOpen, onHome
 
     <section className="m-findings" id="findings" aria-labelledby="findings-title">
       <div className="m-findings-list">
-        <p className="m-eyebrow m-eyebrow-green">What mattered</p>
-        <h2 className="m-h2-r" id="findings-title">{findings.length === 1 ? "One finding" : `${["Zero", "One", "Two", "Three", "Four", "Five", "Six"][findings.length] || findings.length} findings`}, each with its line.</h2>
+        <div className="m-shead">
+          <h2 className="m-h2-r" id="findings-title">Key findings</h2>
+          <p>Each one links to the passage it came from. Pick a finding to read its source.</p>
+        </div>
         {findings.map((item, index) => <FindingCard key={item.id} finding={item} selected={index === selected} cardRef={(node) => { cards.current[index] = node; }}
           onSelect={() => narrow ? openCite(index, 0, item.citations[0]) : select(index)} onCite={(c, i) => openCite(index, i, c)} style={{ "--i": index }} />)}
-        {!findings.some((item) => item.category === "risks") && <p className="m-muted">No risk finding was kept. That doesn’t mean the call had none; this isn’t a complete risk assessment.</p>}
+        {!findings.some((item) => item.category === "risks") && <p className="m-muted">No risks were flagged. That doesn’t mean the call had none.</p>}
       </div>
-      <aside className="m-findings-aside" aria-label="Source passage">
-        {citation && !narrow && <SourcePanel passages={transcript.passages} citation={citation} offset={offset} onOffset={setOffset} error={transcript.error} onOpenTranscript={(focus) => setDrawer({ focus })} />}
-        <div className="m-checks">
-          <b>How these were checked</b>
-          {checks ? `${checks.findings_retained} of ${checks.findings_checked} findings and ${checks.highlights_retained} of ${checks.highlights_checked} numbers kept after matching against the transcript. ${checks.human_review === "not_reviewed" ? "Not reviewed by a person. " : ""}A matching quote shows it was said, not that the reading of it is right.` : "Each quote was matched against the saved transcript. A matching quote shows it was said, not that the reading of it is right."}
-        </div>
-      </aside>
+      {!narrow && <aside className="m-findings-aside" aria-label="Source passage">
+        {citation && <SourcePanel passages={transcript.passages} citation={citation} offset={offset} onOffset={setOffset} error={transcript.error} onOpenTranscript={(focus) => setDrawer({ focus })} />}
+      </aside>}
     </section>
 
     <section className="m-numbers" id="numbers" aria-labelledby="numbers-title">
-      <p className="m-eyebrow m-eyebrow-green">The numbers they gave</p>
-      <h2 className="m-h2-r" id="numbers-title">{highlights.length ? `${["No", "One figure", "Two figures", "Three figures", "Four figures"][highlights.length] || `${highlights.length} figures`}, straight from the call.` : "No figures passed the checks."}</h2>
+      <div className="m-shead">
+        <h2 className="m-h2-r" id="numbers-title">Figures from the call</h2>
+        <p>{highlights.length ? "As management stated them, with the quote each one came from." : "No figures could be matched to the transcript."}</p>
+      </div>
       <div className="m-tiles">
         {highlights.map((metric) => {
-          const period = highlightPeriod(report, metric);
+          const period = highlightPeriod(research, metric);
           return <div className="m-tile" key={metric.id}>
             <span className="m-eyebrow">{metric.label}</span>
             <b>{metric.value}</b>
             <p className="m-mono">“{metric.citations[0].quote.length > 120 ? `${metric.citations[0].quote.slice(0, 118).replace(/\s+\S*$/, "")}…` : metric.citations[0].quote}”</p>
             <span className="m-tile-foot">
               <button type="button" className="m-cite m-hit" onClick={() => openCite(null, 0, metric.citations[0])} aria-label={`Read passage ${metric.citations[0].passage_id.slice(1)}, the source for ${metric.label}`}>{metric.citations[0].passage_id} ✓</button>
-              {period && <span className={`m-period ${period === "unconfirmed" ? "is-warn" : ""}`}>{{ unconfirmed: "Period not confirmed", annual: "Full-year figure", confirmed: "This quarter" }[period]}</span>}
+              {period && <span className={`m-period ${period === "unconfirmed" ? "is-warn" : ""}`}>{period === "unconfirmed" ? "Period not confirmed" : period === "annual" ? "Full year" : "This quarter"}</span>}
             </span>
           </div>;
         })}
@@ -394,58 +382,70 @@ export default function Report({ report: initial, history, names, onOpen, onHome
 
     <section className="m-promise-wrap" id="promise" aria-labelledby="promise-title">
       <div className="m-promise">
-        <p className="m-eyebrow m-eyebrow-mint">Promise vs. delivery</p>
         <div className="m-promise-head">
-          <h2 className="m-h2-r" id="promise-title">Did they hit what they said they would?</h2>
-          {comparison?.outlook?.quote && <p>Last call, management said: <span className="m-mono m-cream">“{comparison.outlook.quote}”</span> <span className="m-mono m-mint m-small">{report.context.previous_call ? `Q${report.context.previous_call.quarter} FY${String(report.context.previous_call.year).slice(-2)}` : ""} · {comparison.outlook.passage_id}</span></p>}
+          <h2 className="m-h2-r" id="promise-title">Guidance vs. results</h2>
+          {comparison?.outlook?.quote && <p>On the previous call, management said: <span className="m-mono m-cream">“{comparison.outlook.quote}”</span> <span className="m-mono m-mint m-small">{report.context.previous_call ? `Q${report.context.previous_call.quarter} FY${String(report.context.previous_call.year).slice(-2)}` : ""} · {comparison.outlook.passage_id}</span></p>}
         </div>
         {!report.context && contextState === "loading" && <div className="m-promise-skel"><Skeleton height={36} width="40%" radius={10} /><Skeleton height={36} width="55%" radius={10} /></div>}
         {!report.context && contextState === "error" && <p className="m-promise-msg">Last quarter’s outlook couldn’t be loaded right now. The rest of the report is unaffected.</p>}
         {chart && <PromiseChart chart={chart} report={report} />}
         {report.context && !chart?.prior && comparison?.status !== "compared" && <p className="m-promise-msg">{comparison?.status === "directional" ? comparison.message : comparison?.message || "No fair forecast-to-result comparison is available for this call."}</p>}
         {report.context?.additional_comparisons?.length > 0 && <ul className="m-also">{report.context.additional_comparisons.map((item) => <li key={item.metric}><b>{item.headline}</b><span className="m-mono">Expected {item.expected.toLowerCase()} · reported {item.reported?.value}</span></li>)}</ul>}
-        <p className="m-promise-foot">{comparison?.limitation || "Compares stated, possibly rounded figures."} This is management’s own outlook, not analyst consensus.</p>
+        <p className="m-promise-foot">{comparison?.limitation || "Compares stated, possibly rounded figures."} This is the company’s own guidance, not analyst estimates.</p>
       </div>
     </section>
 
     <section className="m-stock" id="stock" ref={stockRef} aria-labelledby="stock-title">
-      <p className="m-eyebrow m-eyebrow-green">What the stock heard</p>
-      <div className="m-stock-head">
-        <h2 className="m-h2-r" id="stock-title">{prices.length > 1 ? `${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"} after the call.` : "Prices after the call."}</h2>
-        <span className="m-muted">Shown side by side, not as cause and effect.</span>
+      <div className="m-shead">
+        <h2 className="m-h2-r" id="stock-title">Stock price after the call</h2>
+        <p>{prices.length > 1 ? `Daily closes for ${prices.length - 1} trading ${prices.length === 2 ? "day" : "days"}. ` : ""}The call may not be the reason for the move.</p>
       </div>
       <div className="m-stock-card">
-        {prices.length > 1 ? <QuoteRail prices={prices} quotes={quotes} height={narrow ? 300 : 420} label={`${report.ticker} closes for ${prices.length - 1} trading days after the ${periodLabel(report)} call, from $${prices[0].price.toFixed(2)} to $${prices.at(-1).price.toFixed(2)}. Drawn with lines management said on the call.`} />
+        {priceState === "loading" && <p className="m-stock-status" role="status">Loading more trading days…</p>}
+        {prices.length > 1 ? <PriceChart prices={prices} active={day} onActive={setDay} marks={[1, 5, 21]} height={narrow ? 280 : 380}
+          title={`${report.ticker} closing prices for ${prices.length - 1} trading days after the ${periodLabel(report)} call`} />
           : <p className="m-stock-empty">Closing prices aren’t available for this call. The transcript and findings still are.</p>}
-        {priceState === "loading" && <p className="m-stock-status m-mono" role="status">Pulling up to 21 trading days…</p>}
-        <div className="m-stock-tiles">
-          {[["Call day", null], ["Next day", 1], ["5 days", 5], ["21 days", 21]].map(([label, session]) => {
+        <div className="m-stock-tiles" role="group" aria-label="Price at set points after the call">
+          {[["Call-day close", 0], ["Next day", 1], ["After 5 days", 5], ["After 21 days", 21]].map(([label, session]) => {
             const value = session ? returnAt(report, prices, session) : null;
-            const missing = session && prices.length <= session && value == null;
-            return <span key={label} className={session === 5 ? "is-key" : ""}><small className="m-eyebrow">{label}</small><b className={`m-mono ${session ? `m-move-${moveTone(value)}-ink` : ""}`}>{session ? (missing ? "—" : signedPct(value)) : prices[0] ? `$${prices[0].price.toFixed(2)}` : "—"}</b></span>;
+            const available = prices.length > session;
+            const text = session ? (value == null ? "—" : signedPct(value)) : prices[0] ? `$${prices[0].price.toFixed(2)}` : "—";
+            return <button type="button" key={label} disabled={!available} aria-pressed={(day ?? prices.length - 1) === session}
+              onClick={() => setDay(session)} onMouseEnter={() => available && setDay(session)}>
+              <small>{label}</small><b className={session ? `m-move-${moveTone(value)}-ink` : ""}>{text}</b>
+            </button>;
           })}
         </div>
-        <p className="m-stock-foot">Regular-session daily closes from Yahoo Finance. After-hours and intraday moves aren’t shown.</p>
+        <p className="m-stock-foot">Regular-session closes from Yahoo Finance. After-hours and intraday moves aren’t shown.</p>
       </div>
     </section>
 
     <section className="m-headlines" id="headlines" aria-labelledby="headlines-title">
-      <div className="m-section-head m-section-head-tight">
-        <div><p className="m-eyebrow m-eyebrow-green">Headlines around the call</p><h2 className="m-h2-r" id="headlines-title">{news?.end ? `What the news said up to ${shortDate(news.end, false)}.` : "What the news said."}</h2></div>
-        <span className="m-muted m-headlines-note">Links only. We didn’t read or verify these articles, and same-day stories may be from after the call.{news && <> <button type="button" className="m-refresh" disabled={newsState === "loading"} onClick={refreshNews}>{newsState === "loading" ? "Checking the feed…" : "Check for new headlines"}</button>{news.checked_at && <span className="m-mono m-refresh-when"> · last checked {shortDate(news.checked_at)}</span>}</>}</span>
+      <div className="m-shead">
+        <h2 className="m-h2-r" id="headlines-title">News before the call</h2>
+        <p>{news?.end ? `Headlines up to ${shortDate(news.end, false)}. ` : ""}Links to outside articles we haven’t checked. Same-day stories may be from after the call.{news && <> <button type="button" className="m-refresh" disabled={newsState === "loading"} onClick={refreshNews}>{newsState === "loading" ? "Checking…" : "Check for new headlines"}</button>{news.checked_at && <span className="m-refresh-when"> · last checked {shortDate(news.checked_at)}</span>}</>}</p>
       </div>
       <div className="m-news-list">
         {!news && contextState === "loading" && Array.from({ length: 4 }, (_, i) => <div key={i} className="m-news is-skeleton"><Skeleton width={110} height={12} /><Skeleton height={16} /><Skeleton width={80} height={12} /></div>)}
-        {news?.items?.map((item) => <a key={item.url} className="m-news" href={item.url} target="_blank" rel="noreferrer"><span className="m-mono m-news-src">{item.source}</span><span className="m-news-title">{newsTitle(item)}</span><span className="m-mono m-news-date">{shortDate(item.published_at)}</span><span aria-hidden="true" className="m-news-arrow">↗</span></a>)}
+        {news?.items?.map((item) => <a key={item.url} className="m-news" href={item.url} target="_blank" rel="noreferrer"><span className="m-news-src"><PublisherIcon item={item} />{item.source}</span><span className="m-news-title">{newsTitle(item)}</span><span className="m-mono m-news-date">{shortDate(item.published_at)}</span><span aria-hidden="true" className="m-news-arrow">↗</span></a>)}
         {news && !news.items?.length && <p className="m-muted m-news-empty">{news.message || "No matching headlines were found for the two weeks before the call."}</p>}
         {!news && contextState === "error" && <p className="m-muted m-news-empty">Headlines couldn’t be loaded right now.</p>}
       </div>
     </section>
 
-    <footer className="m-receipt">
-      <span className="m-mono">READ BY {research.model || "—"} · PROMPT {research.prompt_version || "—"} · {research.generated_at ? shortDate(research.generated_at).toUpperCase() : "—"} · TRANSCRIPT {receiptHash(research.source_hash)}</span>
-      <span>Tone is the model’s read, not a fact. Not investment advice.</span>
-    </footer>
+    <section className="m-method" aria-labelledby="method-title">
+      <h2 id="method-title">How this report was made</h2>
+      <p>{modelLabel(research.model)} read the call transcript{research.generated_at ? ` on ${shortDate(research.generated_at)}` : ""} and wrote the findings. Every quote and number was then matched word for word against the transcript{checks ? `, which kept ${checks.findings_retained} of ${checks.findings_checked} findings and ${checks.highlights_retained} of ${checks.highlights_checked} figures` : ""}. A matching quote shows it was said, not that the reading of it is right. Tone is the model’s reading, not a fact.{checks?.human_review === "not_reviewed" ? " No person reviewed this report." : ""}</p>
+      <details>
+        <summary>Technical details</summary>
+        <dl>
+          <dt>Model</dt><dd>{research.model || "Not recorded"}</dd>
+          <dt>Prompt version</dt><dd>{research.prompt_version || "Not recorded"}</dd>
+          <dt>Transcript fingerprint</dt><dd>{receiptHash(research.source_hash)}</dd>
+        </dl>
+      </details>
+    </section>
+    <SiteFooter />
 
     {sheet && <Modal className="m-sheet" label="Source passage" onClose={() => setSheet(null)}>
       <button type="button" className="m-close m-sheet-close m-hit" onClick={() => setSheet(null)} aria-label="Close source">×</button>

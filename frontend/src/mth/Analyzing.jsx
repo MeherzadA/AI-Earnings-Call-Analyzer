@@ -2,7 +2,7 @@ import { useState } from "react";
 import { companyName, periodLabel, shortDate } from "./format.js";
 import { CompanyLogo, Skeleton } from "./ui.jsx";
 import { AppBar } from "./Landing.jsx";
-import { AfterCard, FindingCard, Modal, SourcePanel, TranscriptDrawer, useNarrow } from "./Report.jsx";
+import { FindingCard, Modal, SourcePanel, TranscriptDrawer, useNarrow } from "./Report.jsx";
 
 // The report, assembling itself: stages up top, findings landing as each passes its checks.
 export default function Analyzing({ period, pending, error, elapsed, names, onHome, onRetry, onCommand }) {
@@ -13,7 +13,6 @@ export default function Analyzing({ period, pending, error, elapsed, names, onHo
   const [drawer, setDrawer] = useState(null);
   const call = pending?.call;
   const findings = pending?.findings || [];
-  const prices = pending?.prices?.daily_prices || [];
   const passages = call?.passages || null;
   const name = companyName(period.ticker, names);
   const finding = findings[Math.min(selected, findings.length - 1)];
@@ -22,45 +21,46 @@ export default function Analyzing({ period, pending, error, elapsed, names, onHo
     { label: call ? "Found the transcript" : "Finding the transcript", state: call ? "done" : "active" },
     { label: passages ? `Reading ${passages.length} passages` : "Reading the passages", state: findings.length ? "done" : call ? "active" : "todo" },
     { label: findings.length ? `Checking every quote · ${findings.length} kept so far` : "Checking every quote word for word", state: findings.length ? "active" : "todo" },
-    { label: pending?.prices ? "Pulled the prices" : "Pulling prices", state: pending?.prices ? "done" : call ? "active" : "todo" },
+    { label: pending?.prices ? "Loaded stock prices" : "Loading stock prices", state: pending?.prices ? "done" : call ? "active" : "todo" },
     { label: "Saving to the library", state: "todo" },
   ];
   const progress = failed ? 100 : Math.min(94, 6 + (call ? 14 : 0) + findings.length * 11 + (pending?.prices ? 8 : 0) + Math.min(elapsed, 45) * 0.6);
   return <div className="m-report m-analyzing">
     <AppBar variant="report" onHome={onHome} onCommand={onCommand} onLibrary={() => onHome("library")} />
     <section className="m-rhero">
-      <p className="m-crumb m-mono"><a href="?" onClick={(event) => { event.preventDefault(); onHome(); }}>Library</a> / {name} / {periodLabel(period)}</p>
+      <nav className="m-crumbs m-crumbs-dark" aria-label="Breadcrumb"><a href="?view=library" onClick={(event) => { event.preventDefault(); onHome("library"); }}>Library</a><span aria-hidden="true">/</span><a href={`?view=library&company=${period.ticker}`} onClick={(event) => { event.preventDefault(); onHome("library", true, period.ticker); }}>{name}</a><span aria-hidden="true">/</span><span aria-current="page">{periodLabel(period)}</span></nav>
       <div className="m-rhero-top">
         <CompanyLogo ticker={period.ticker} size={76} radius={20} className="m-rhero-logo" alt={name} />
         <div className="m-rhero-title">
           <h1 tabIndex={-1} id="report-title">{name} <span>{periodLabel(period)}</span></h1>
-          <span className="m-mono m-rhero-sub" role="status" aria-live="polite">{failed ? "This read couldn’t finish" : `Reading the call · ${elapsed}s${call?.call_date ? ` · call on ${shortDate(call.call_date)}` : ""}`}</span>
+          <span className="m-mono m-rhero-sub" role="status" aria-live="polite">{failed ? "Analysis stopped" : `Analyzing · ${elapsed}s${call?.call_date ? ` · call on ${shortDate(call.call_date)}` : ""}`}</span>
         </div>
         <div className="m-rhero-actions"><div className="m-rhero-btns">
           {passages && <button type="button" className="m-btn m-btn-ghost" onClick={() => setDrawer({ focus: finding?.citations[0].passage_id })}>Read the transcript now</button>}
-          <button type="button" className="m-btn m-btn-ghost" onClick={() => onHome()}>{failed ? "Back to the library" : "Browse while it reads"}</button>
+          <button type="button" className="m-btn m-btn-ghost" onClick={() => onHome("library")}>{failed ? "Back to the library" : "Go to the library"}</button>
         </div></div>
       </div>
-      <div className="m-rhero-grid">
+      <div className="m-rhero-summary">
         <div className="m-stages-wrap">
-          <p className="m-eyebrow m-eyebrow-mint">{failed ? "Stopped" : "About 40 seconds"}</p>
+          <p className="m-eyebrow m-eyebrow-mint">{failed ? "Stopped" : "Usually takes about 40 seconds"}</p>
           {failed ? <div className="m-fail" role="alert">
             <p className="m-short">{error}</p>
             <div className="m-rhero-btns"><button type="button" className="m-btn m-btn-mint" onClick={onRetry}>Try again</button></div>
           </div> : <>
             <ol className="m-stages">{stages.map((stage) => <li key={stage.label} className={`is-${stage.state}`}><span className="m-stage-dot" aria-hidden="true">{stage.state === "done" ? "✓" : ""}</span>{stage.label}{stage.state === "active" && <span className="sr-only"> (in progress)</span>}</li>)}</ol>
             <div className="m-progress" role="progressbar" aria-label="Analysis progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}><span style={{ width: `${progress}%` }} /></div>
-            <p className="m-short-note">Findings appear as they pass their checks. If you leave, the read keeps going and lands in the library.</p>
+            <p className="m-short-note">You can leave this page. The report keeps building and will be saved to the library.</p>
           </>}
         </div>
-        <AfterCard report={{ return_1day: pending?.prices?.return_1day, return_5day: pending?.prices?.return_5day }} prices={prices} loading={!pending?.prices && !failed} />
       </div>
     </section>
 
     <section className="m-findings" aria-labelledby="stream-title">
       <div className="m-findings-list">
-        <p className="m-eyebrow m-eyebrow-green">What mattered</p>
-        <h2 className="m-h2-r" id="stream-title">{findings.length ? `${findings.length} ${findings.length === 1 ? "finding" : "findings"} so far, each with its line.` : "Findings land here as they’re checked."}</h2>
+        <div className="m-shead">
+          <h2 className="m-h2-r" id="stream-title">Key findings</h2>
+          <p>{findings.length ? `${findings.length} so far. More appear as they pass the checks.` : "Findings appear here once their quotes are matched to the transcript."}</p>
+        </div>
         <div aria-live="polite" className="m-stream">
           {findings.map((item, index) => <FindingCard key={item.id || index} finding={{ ...item, id: item.id || `F${index + 1}` }} selected={index === selected} style={{ "--i": 0 }}
             onSelect={() => { if (narrow) setSheet(item.citations[0]); else { setSelected(index); setOffset(0); } }} onCite={(citation) => { setSelected(index); setOffset(0); if (narrow) setSheet(citation); }} />)}

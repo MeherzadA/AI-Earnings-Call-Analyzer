@@ -1,6 +1,8 @@
 """Fetch one earnings call with Parquet HTTP range reads, not a full download."""
 
 import os
+import re
+import difflib
 import json
 from pathlib import Path
 from functools import lru_cache
@@ -57,9 +59,47 @@ def _read_rows(sql, parameters, hour, timeout, retries):
             raise
 
 
+# Names people type that aren't in the listed company name (brands, products, old names).
+COMPANY_ALIASES = {
+    "google": "GOOG", "youtube": "GOOG", "waymo": "GOOG", "facebook": "META", "instagram": "META", "whatsapp": "META",
+    "aws": "AMZN", "amazon web services": "AMZN", "azure": "MSFT", "xbox": "MSFT", "linkedin": "MSFT", "iphone": "AAPL",
+    "coke": "KO", "chase": "JPM", "jp morgan": "JPM", "jpmorgan": "JPM", "disney": "DIS", "square": "XYZ", "cash app": "XYZ",
+    "venmo": "PYPL", "hp": "HPQ", "hewlett packard": "HPQ", "att": "T", "exxon": "XOM", "j&j": "JNJ", "jnj": "JNJ",
+    "goldman": "GS", "bofa": "BAC", "citi": "C", "citibank": "C", "tsmc": "TSM", "snapchat": "SNAP", "lilly": "LLY",
+    "warner bros": "WBD", "hbo": "WBD", "ford": "F", "gm": "GM", "chevy": "GM", "pepsi": "PEP", "frito lay": "PEP",
+}
+# Listing boilerplate after the company name, e.g. "Coca-Cola Company (The) Common Stock".
+_NAME_NOISE = re.compile(r"\s*(?:\(the\)|\(de\)|,?\s*(?:class [a-z]\s*)?(?:common stock|common shares|ordinary shares?|american depositary shares?|depositary shares?|shares of beneficial interest)\b.*)", re.I)
+_FUND_WORDS = re.compile(r"\b(?:etf|fund|trust|notes? due|preferred|warrants?|units?|rights|depositary shares representing)\b", re.I)
+
+
+def _normal(text):
+    return " ".join(re.sub(r"[^a-z0-9& ]+", " ", text.casefold().replace("'", "").replace(".com", "")).split())
+
+
+def clean_company_name(name):
+    return _NAME_NOISE.sub("", name or "").strip(" ,")
+
+
 @lru_cache(maxsize=1)
 def company_catalog():
-    return json.loads(Path(__file__).with_name("transcript_companies.json").read_text(encoding="utf-8"))["companies"]
+    companies = json.loads(Path(__file__).with_name("transcript_companies.json").read_text(encoding="utf-8"))["companies"]
+    # One row per company: share classes (GOOG/GOOGL/GOOGM) share a name; keep the shortest symbol.
+    by_name = {}
+    for item in companies:
+        name = clean_company_name(item["name"])
+        key = _normal(name) if name != item["symbol"] else item["symbol"]
+        current = by_name.get(key)
+        symbols = (current["_symbols"] if current else set()) | {item["symbol"]}
+        if current is None or (len(item["symbol"]), item["symbol"]) < (len(current["symbol"]), current["symbol"]):
+            current = {"symbol": item["symbol"], "name": name, "_name": _normal(name), "_fund": bool(_FUND_WORDS.search(item["name"])), "_named": name != item["symbol"]}
+        current["_symbols"] = symbols
+        by_name[key] = current
+    return list(by_name.values())
+
+
+def _public(item):
+    return {"symbol": item["symbol"], "name": item["name"]}
 
 
 @lru_cache(maxsize=1)
@@ -73,12 +113,37 @@ def company_name(ticker):
 
 
 def search_companies(query: str) -> list[dict]:
-    """Autocomplete only companies present in the transcript archive."""
-    query = query.strip().casefold()
+    """Autocomplete only companies present in the transcript archive, by ticker, name, brand or near-miss spelling."""
+    raw = query.strip()
+    query = _normal(raw)
     if not query:
         return []
-    matches = [item for item in company_catalog() if query in item["symbol"].casefold() or query in item["name"].casefold()]
-    return sorted(matches, key=lambda item: (item["symbol"].casefold() != query, not item["symbol"].casefold().startswith(query), item["symbol"]))[:8]
+    catalog = company_catalog()
+    symbol = raw.upper()
+    aliased = {COMPANY_ALIASES[key] for key in COMPANY_ALIASES if key == query or (len(query) >= 3 and key.startswith(query))}
+
+    def rank(item):
+        name, ticker = item["_name"], item["symbol"]
+        words = name.split()
+        if symbol in item["_symbols"]: score = 0
+        elif ticker in aliased: score = 1
+        elif name.startswith(query): score = 2
+        elif ticker.startswith(symbol): score = 3
+        elif any(word.startswith(query) for word in words) or f" {query}" in f" {name}": score = 4
+        elif query in name or symbol in ticker: score = 5
+        else: return None
+        return (score + (6 if item["_fund"] else 0) + (0 if item["_named"] or score == 0 else 12), len(name), ticker)
+
+    ranked = sorted((key, item) for item in catalog if (key := rank(item)))
+    results = [_public(item) for _, item in ranked[:8]]
+    if not results and len(query) >= 4:
+        # Typos: compare against each company's first name word, e.g. "nvidai" -> NVIDIA.
+        firsts = {}
+        for item in catalog:
+            if not item["_fund"] and item["_name"]:
+                firsts.setdefault(item["_name"].split()[0], item)
+        results = [_public(firsts[word]) for word in difflib.get_close_matches(query.split()[0], list(firsts), n=5, cutoff=0.75)]
+    return results
 
 
 def available_calls(ticker: str) -> list[dict]:

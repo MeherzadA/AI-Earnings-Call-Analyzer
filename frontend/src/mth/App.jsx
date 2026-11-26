@@ -7,6 +7,7 @@ import Landing, { AppBar, SiteFooter } from "./Landing.jsx";
 import Report from "./Report.jsx";
 import Analyzing from "./Analyzing.jsx";
 import CommandMenu from "./Command.jsx";
+import LibraryPage from "./Library.jsx";
 
 function ReportSkeleton({ onHome, onCommand }) {
   const [slow, setSlow] = useState(false);
@@ -17,7 +18,7 @@ function ReportSkeleton({ onHome, onCommand }) {
       <Skeleton width={180} height={12} className="m-skel-dark" />
       <p className="m-wake" aria-live="polite">{slow ? <><span className="m-wake-dot" aria-hidden="true" />Waking the app up. The saved report will open on its own in a few seconds.</> : ""}</p>
       <div className="m-rhero-top"><Skeleton width={76} height={76} radius={20} className="m-skel-dark" /><div className="m-rhero-title"><Skeleton width={340} height={52} className="m-skel-dark" /><Skeleton width={260} height={14} className="m-skel-dark" /></div></div>
-      <div className="m-rhero-grid"><div><Skeleton width={160} height={12} className="m-skel-dark" /><Skeleton height={44} className="m-skel-dark" style={{ marginTop: 14 }} /><Skeleton height={44} width="70%" className="m-skel-dark" style={{ marginTop: 10 }} /></div><div className="m-after is-skeleton"><Skeleton height={14} width="50%" /><Skeleton height={80} radius={12} /><Skeleton height={56} radius={14} /></div></div>
+      <div className="m-rhero-summary"><Skeleton height={44} className="m-skel-dark" /><Skeleton height={44} width="70%" className="m-skel-dark" style={{ marginTop: 10 }} /></div>
     </section>
     <section className="m-findings"><div className="m-findings-list">{[0, 1, 2].map((i) => <div key={i} className="m-find is-skeleton"><Skeleton width={96} height={22} radius={999} /><Skeleton height={22} width="80%" /><Skeleton height={14} /></div>)}</div><aside className="m-findings-aside"><div className="m-source m-source-wait"><Skeleton height={12} width="40%" className="m-skel-dark" /><Skeleton height={12} className="m-skel-dark" /><Skeleton height={12} className="m-skel-dark" /></div></aside></section>
   </div>;
@@ -60,10 +61,13 @@ function Shell() {
     return () => { cancelled = true; };
   }, [historyKey]);
 
-  const setLocation = (id, push = true) => {
+  const setLocation = (id, push = true, page = null) => {
     shown.current = id ?? null;
     const url = new URL(window.location.href);
-    if (id) url.searchParams.set("report", String(id)); else url.searchParams.delete("report");
+    url.search = "";
+    if (id) url.searchParams.set("report", String(id));
+    if (page?.view) url.searchParams.set("view", page.view);
+    if (page?.company) url.searchParams.set("company", page.company);
     url.hash = "";
     if (url.toString() !== window.location.href) window.history[push ? "pushState" : "replaceState"]({}, "", url);
   };
@@ -72,11 +76,16 @@ function Shell() {
     setView(next); window.scrollTo({ top: 0 });
   });
 
-  function home(target, push = true) {
+  // home("library", ticker) opens the library page, optionally narrowed to one company.
+  function home(target, push = true, company = null) {
     request.current += 1;
+    if (target === "library") {
+      setLocation(null, push, { view: "library", company });
+      show({ kind: "library", company });
+      return;
+    }
     setLocation(null, push);
     show({ kind: "home" });
-    if (target === "library") requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById("library")?.scrollIntoView({ block: "start" })));
   }
 
   async function openReport(item, passage, push = true) {
@@ -122,8 +131,10 @@ function Shell() {
   useEffect(() => {
     function navigate() {
       const id = reportIdFromSearch(window.location.search);
+      const params = new URLSearchParams(window.location.search);
       if (id && id === shown.current) return;
       if (id) openReport({ report_id: id }, null, false);
+      else if (params.get("view") === "library") home("library", false, params.get("company")?.toUpperCase() || null);
       else {
         const invalid = new URLSearchParams(window.location.search).has("report");
         home(null, false);
@@ -153,9 +164,10 @@ function Shell() {
 
   useEffect(() => {
     const subject = view.report || view.period;
-    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · minus the hour` : "Earnings calls, minus the hour";
+    document.title = subject ? `${companyName(subject.ticker, names)} ${periodLabel(subject)} · Earnings Analyzer` : view.kind === "library" ? `${view.company ? `${companyName(view.company, names)} · ` : ""}Library · Earnings Analyzer` : "Earnings Analyzer";
     if (view.kind === "report" || view.kind === "analyzing") document.getElementById("report-title")?.focus({ preventScroll: true });
-  }, [view.kind, view.report?.report_id, view.period?.ticker]);
+    if (view.kind === "library") document.getElementById("library-title")?.focus({ preventScroll: true });
+  }, [view.kind, view.report?.report_id, view.period?.ticker, view.company]);
 
   const openCommand = () => setCommand(true);
   const actions = [
@@ -166,7 +178,8 @@ function Shell() {
   return <>
     <a className="m-skip" href="#main">Skip to content</a>
     <main id="main" className="m-app">
-      {view.kind === "home" && <Landing history={history} total={total} historyState={historyState} names={names} onNames={addNames} onOpen={(item, passage) => openReport(item, passage)} onAnalyze={analyze} onCommand={openCommand} onRetry={() => setHistoryKey((key) => key + 1)} />}
+      {view.kind === "library" && <LibraryPage history={history} total={total} state={historyState} names={names} company={view.company} onCompany={(ticker) => home("library", true, ticker)} onOpen={(item) => openReport(item)} onHome={home} onCommand={openCommand} onRetry={() => setHistoryKey((key) => key + 1)} />}
+      {view.kind === "home" && <Landing history={history} total={total} historyState={historyState} names={names} onNames={addNames} onOpen={(item, passage) => openReport(item, passage)} onAnalyze={analyze} onCommand={openCommand} onLibrary={() => home("library")} onRetry={() => setHistoryKey((key) => key + 1)} />}
       {view.kind === "loading" && <ReportSkeleton onHome={home} onCommand={openCommand} />}
       {view.kind === "error" && <ErrorView message={view.message} onRetry={view.retry} onHome={home} onCommand={openCommand} />}
       {view.kind === "report" && <Report key={view.report.report_id} report={view.report} initialPassage={view.passage} history={history} names={names} onOpen={(item) => openReport(item)} onHome={home} onCommand={openCommand} />}

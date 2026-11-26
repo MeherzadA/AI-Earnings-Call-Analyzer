@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  companyName, filterLibrary, highlightPeriod, markRange, markedSessions, money, parseMoney, parseOutlookRange,
-  periodLabel, priceGeometry, promiseChart, railQuote, railQuotes, samePeriod, shortVersion, signedPct,
+  companyName, filterLibrary, highlightPeriod, markRange, money, parseMoney, parseOutlookRange,
+  periodLabel, priceGeometry, promiseChart, samePeriod, shortVersion, signedPct,
 } from "../src/mth/format.js";
 
 test("labels periods and matches them across string and number quarters", () => {
@@ -58,31 +58,13 @@ test("prefers curated short names and trims legal suffixes from the API's", () =
   assert.equal(companyName("ZZZ"), "ZZZ");
 });
 
-test("picks one rail quote per category, cut to a sentence", () => {
-  const findings = [
-    { id: "F1", category: "risks", citations: [{ quote: "Supply is tight. More words follow." }] },
-    { id: "F2", category: "performance", citations: [{ quote: "Record revenue." }] },
-    { id: "F3", category: "risks", citations: [{ quote: "Another risk." }] },
-  ];
-  const quotes = railQuotes(findings);
-  assert.deepEqual(quotes.map((item) => item.findingId), ["F2", "F1", "F3"]);
-  assert.equal(quotes[1].quote, "Supply is tight.");
-  assert.ok(railQuote("word ".repeat(60), 40).endsWith("…"));
-});
-
-test("draws a smooth price path and marks the sessions that matter", () => {
+test("draws a smooth price path", () => {
   const prices = [100, 98, 97, 103, 101, 99, 104, 102].map((price) => ({ price }));
   const geometry = priceGeometry(prices, { left: 0, right: 70, top: 0, bottom: 100 });
   assert.equal(geometry.points.length, 8);
   assert.equal(geometry.points[6].y, 0);
   assert.ok(geometry.path.startsWith("M0 "));
   assert.equal(priceGeometry([{ price: 1 }], { left: 0, right: 1, top: 0, bottom: 1 }), null);
-  const marks = markedSessions(prices);
-  assert.equal(marks.get(0), "CALL DAY");
-  assert.equal(marks.get(5), "+5 DAYS");
-  assert.equal(marks.get(2), "LOW");
-  assert.equal(marks.get(6), "HIGH");
-  assert.equal(marks.get(7), "+7");
 });
 
 test("builds the promise chart and the one-line answer from a comparison", () => {

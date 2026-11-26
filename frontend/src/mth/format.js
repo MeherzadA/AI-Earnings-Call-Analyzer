@@ -1,31 +1,62 @@
-// Pure presentation helpers for the "minus the hour" interface. No DOM, no React.
+// Pure presentation helpers for the Earnings Analyzer interface. No DOM, no React.
 
 export const NAMES = {
   AAPL: "Apple", NVDA: "NVIDIA", PYPL: "PayPal", MSFT: "Microsoft", GOOGL: "Alphabet", GOOG: "Alphabet",
   AMZN: "Amazon", META: "Meta", TSLA: "Tesla", LITE: "Lumentum", VET: "Vermilion", VOXX: "VOXX", VARRY: "Vår Energi",
 };
 
-// Files bundled in public/logos. Anything else falls back to a monogram.
+// Files bundled in public/logos; other tickers try public logo CDNs, then a monogram.
 export const LOGOS = { AAPL: "apple", NVDA: "nvidia", PYPL: "paypal", MSFT: "microsoft" };
 
-export const CATEGORIES = {
-  performance: { label: "Results", bg: "#DDF6E4", fg: "#1E7A46", ink: "#B6F5C9" },
-  opportunities: { label: "Opportunity", bg: "#FFF0C7", fg: "#8A5A00", ink: "#FFD98A" },
-  risks: { label: "Risk", bg: "#FFE1D9", fg: "#A33A1E", ink: "#FFB4A3" },
-  guidance: { label: "Guidance", bg: "#DCE8FF", fg: "#2B4C8C", ink: "#A9C8FF" },
-};
-export const RAIL_ORDER = ["performance", "opportunities", "risks", "guidance"];
+export function logoSources(ticker) {
+  if (!ticker) return [];
+  const symbol = encodeURIComponent(String(ticker).toUpperCase());
+  return [
+    LOGOS[ticker] && `/logos/${LOGOS[ticker]}.svg`,
+    `https://financialmodelingprep.com/image-stock/${symbol}.png`,
+    `https://assets.parqet.com/logos/symbol/${symbol}?format=png`,
+  ].filter(Boolean);
+}
 
+// Bundled marks in public/publishers, matched on the feed's publisher name.
+const PUBLISHERS = [
+  [/reuters/i, "reuters"], [/bloomberg/i, "bloomberg"], [/cnbc/i, "cnbc"], [/wall street journal|\bwsj\b/i, "wsj"],
+  [/barron/i, "barrons"], [/marketwatch/i, "marketwatch"], [/financial times|\bft\b/i, "ft"], [/yahoo/i, "yahoo"],
+  [/motley fool|\bfool\b/i, "fool"], [/seeking alpha/i, "seekingalpha"], [/investopedia/i, "investopedia"],
+  [/benzinga/i, "benzinga"], [/thestreet/i, "thestreet"], [/techcrunch/i, "techcrunch"], [/9to5mac/i, "9to5mac"],
+  [/\bcnn\b/i, "cnn"], [/\bcbs\b/i, "cbs"], [/associated press|^ap\b|ap news/i, "ap"],
+];
+
+export function publisherIcon(item) {
+  const match = PUBLISHERS.find(([pattern]) => pattern.test(item?.source || ""));
+  if (match) return `/publishers/${match[1]}.png`;
+  try {
+    const host = new URL(item?.site || "").hostname;
+    return host ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64` : null;
+  } catch { return null; }
+}
+
+export const CATEGORIES = {
+  performance: { label: "Results", fg: "#1E7A46", ink: "#B6F5C9" },
+  opportunities: { label: "Opportunity", fg: "#8A5A00", ink: "#FFD98A" },
+  risks: { label: "Risk", fg: "#A33A1E", ink: "#FFB4A3" },
+  guidance: { label: "Guidance", fg: "#2B4C8C", ink: "#A9C8FF" },
+};
 // Curated short names first; the API's legal names ("PayPal Holdings, Inc.") lose their suffixes.
 export const companyName = (ticker, names = {}) => (NAMES[ticker] || names[ticker] || ticker).trim()
   .replace(/(?:,?\s+(?:Inc|Corp|Corporation|Company|Ltd|Limited|plc|Co|Holdings|Group|N\.V|S\.A|AG|SE)\.?)+$/i, "");
+
 
 export function periodLabel(item) {
   return `Q${Number(item.quarter)} FY${String(item.year).slice(-2)}`;
 }
 
+// Share classes of one company (saved reports exist under both GOOG and GOOGL).
+const SHARE_CLASSES = { GOOGL: "GOOG", GOOGM: "GOOG", GOOGN: "GOOG", "BRK-A": "BRK-B" };
+export const companyKey = (ticker) => SHARE_CLASSES[ticker] || ticker;
+
 export function samePeriod(a, b) {
-  return a && b && a.ticker === b.ticker && Number(a.year) === Number(b.year) && Number(a.quarter) === Number(b.quarter);
+  return a && b && companyKey(a.ticker) === companyKey(b.ticker) && Number(a.year) === Number(b.year) && Number(a.quarter) === Number(b.quarter);
 }
 
 // Typographic minus so signed columns line up in tabular figures.
@@ -74,33 +105,6 @@ export function parseOutlookRange(text) {
   return { low: center - delta, high: center + delta };
 }
 
-// A quote short enough to ride a line: the first sentence, cut on a word boundary.
-export function railQuote(quote, max = 96) {
-  const text = (quote || "").replace(/\s+/g, " ").trim();
-  const sentence = text.match(/^.+?[.!?](?=\s|$)/)?.[0] || text;
-  if (sentence.length <= max) return sentence;
-  const cut = sentence.slice(0, max);
-  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), max * 0.6)).replace(/[,;:]$/, "")}…`;
-}
-
-// One quote per category, in the signature order, from findings that carry citations.
-export function railQuotes(findings = []) {
-  const quotes = [];
-  for (const category of RAIL_ORDER) {
-    const finding = findings.find((item) => item.category === category && item.citations?.[0]?.quote);
-    if (finding) quotes.push({ category, label: CATEGORIES[category].label.toUpperCase(), quote: railQuote(finding.citations[0].quote), findingId: finding.id });
-  }
-  if (!quotes.length) return [];
-  // Top up to four with further findings so a thin report still has words on its line.
-  for (const finding of findings) {
-    if (quotes.length >= 4) break;
-    if (finding.citations?.[0]?.quote && !quotes.some((item) => item.findingId === finding.id)) {
-      quotes.push({ category: finding.category, label: CATEGORIES[finding.category]?.label.toUpperCase() || "NOTE", quote: railQuote(finding.citations[0].quote), findingId: finding.id });
-    }
-  }
-  return quotes;
-}
-
 // Smooth price line: a monotone cubic, flat at each high and low as in the design, but without
 // a flat step at every close, so text riding the line doesn't bunch up at each day.
 export function priceGeometry(prices, { left, right, top, bottom }) {
@@ -123,25 +127,6 @@ export function priceGeometry(prices, { left, right, top, bottom }) {
     path += ` C${+(a.x + third).toFixed(1)} ${+(a.y + tangents[i - 1] * third).toFixed(1)} ${+(b.x - third).toFixed(1)} ${+(b.y - tangents[i] * third).toFixed(1)} ${b.x} ${b.y}`;
   }
   return { points, path, high, low, y, area: (floor) => `${path} L${points.at(-1).x} ${floor} L${points[0].x} ${floor} Z` };
-}
-
-// Which closes get a price label: call day, +1, +5, the low, the high, and the last.
-export function markedSessions(prices) {
-  const marks = new Map();
-  if (!prices.length) return marks;
-  const values = prices.map((item) => item.price);
-  const last = prices.length - 1;
-  marks.set(0, "CALL DAY");
-  if (last >= 1) marks.set(1, "+1 DAY");
-  if (last >= 5) marks.set(5, "+5 DAYS");
-  if (last > 6) {
-    const low = values.indexOf(Math.min(...values.slice(1)));
-    const high = values.indexOf(Math.max(...values.slice(1)));
-    if (!marks.has(low)) marks.set(low, "LOW");
-    if (!marks.has(high)) marks.set(high, "HIGH");
-  }
-  if (!marks.has(last)) marks.set(last, `+${last}`);
-  return marks;
 }
 
 export function returnAt(report, prices, session) {
@@ -222,6 +207,41 @@ export function promiseChart(report) {
 function niceStep(raw) {
   const power = 10 ** Math.floor(Math.log10(raw));
   return [1, 2, 2.5, 5, 10].map((n) => n * power).find((n) => n >= raw) || 10 * power;
+}
+
+// Price chart scales: y ticks on round numbers covering every close, x by trading day.
+export function priceScale(prices, { left, right, top, bottom }, tickCount = 4) {
+  const values = prices.map((item) => item.price).filter(Number.isFinite);
+  if (values.length < 2 || values.length !== prices.length) return null;
+  const low = Math.min(...values), high = Math.max(...values);
+  const pad = (high - low || high * 0.02 || 1) * 0.12;
+  const step = niceStep((high - low + pad * 2) / tickCount);
+  const min = Math.floor((low - pad) / step) * step, max = Math.ceil((high + pad) / step) * step;
+  const ticks = [];
+  for (let value = min; value <= max + step / 2; value += step) ticks.push(+value.toFixed(6));
+  const x = (index) => left + index * (right - left) / (prices.length - 1);
+  const y = (price) => top + (max - price) / (max - min) * (bottom - top);
+  const points = prices.map((item, index) => ({ ...item, index, x: x(index), y: y(item.price) }));
+  const path = points.map((point, index) => `${index ? "L" : "M"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  return { points, path, ticks, x, y, min, max };
+}
+
+// Indices to label on the date axis: the call day, the last day, and evenly spaced days between.
+export function dateTicks(count, slots = 5) {
+  if (count < 2) return [0];
+  const want = Math.min(slots, count);
+  return [...new Set(Array.from({ length: want }, (_, i) => Math.round(i * (count - 1) / (want - 1))))];
+}
+
+export function priceLabel(value) {
+  if (!Number.isFinite(value)) return "—";
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// "gemini-3.5-flash-lite" -> "Gemini 3.5 Flash-Lite"
+export function modelLabel(model) {
+  if (!model) return "an AI model";
+  return model.replace(/^gemini-/i, "Gemini ").replace(/-flash-lite$/i, " Flash-Lite").replace(/-flash$/i, " Flash").replace(/-pro$/i, " Pro");
 }
 
 export function newsTitle(item) {
