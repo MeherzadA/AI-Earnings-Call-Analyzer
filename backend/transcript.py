@@ -229,6 +229,8 @@ def fetch_paragraphs(ticker: str, year: int, quarter: int) -> list[tuple[str, st
 # A sentence ends at . ! ? followed by a space and a capital, so "$0.94" and "U.S. sales" stay whole.
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+(?=[A-Z\"“])")
 _FIGURE = re.compile(r"\$\s?\d|\d(?:\.\d+)?\s?(?:%|(?:percent|billion|million)\b)", re.I)
+# Operators and voices the transcript couldn't name ("Speaker 5") are usually not management.
+_UNNAMED = re.compile(r"^(?:operator|speaker\b|unknown|unidentified)", re.I)
 _SKIP = re.compile(r"forward-looking|non-gaap reconciliation|safe harbor|press release|webcast|operator|thank you|welcome", re.I)
 
 
@@ -240,7 +242,7 @@ def call_quotes(paragraphs, limit=4, max_length=150):
     candidates = []
     for index, (speaker, text) in enumerate(paragraphs):
         name = speaker.strip()
-        if not name or name.casefold() == "operator":
+        if not name or _UNNAMED.match(name):
             continue
         for sentence in _SENTENCE_BREAK.split(" ".join(text.split())):
             sentence = sentence.strip()

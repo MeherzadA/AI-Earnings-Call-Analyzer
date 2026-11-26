@@ -83,6 +83,7 @@ class CallQuoteChecks(unittest.TestCase):
     def test_picks_verbatim_management_lines_with_figures(self):
         paragraphs = [
             ("Operator", "Welcome to the call. Revenue was $10 billion, up 5% year over year."),
+            ("Speaker 5", "So deliveries were 400,000 units, up 7% on the quarter, is that right."),
             ("Jane Doe", "Some remarks contain forward-looking statements about 2026 revenue of $5 billion."),
             ("Sam Lee", "Good morning. Revenue was $94.9 billion, up 8% from a year ago in U.S. dollars. More later."),
             ("Sam Lee", "We are excited about the road ahead and our people."),
