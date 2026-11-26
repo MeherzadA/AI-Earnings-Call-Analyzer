@@ -137,12 +137,25 @@ def search_companies(query: str) -> list[dict]:
     ranked = sorted((key, item) for item in catalog if (key := rank(item)))
     results = [_public(item) for _, item in ranked[:8]]
     if not results and len(query) >= 4:
-        # Typos: compare against each company's first name word, e.g. "nvidai" -> NVIDIA.
+        # Typos: compare against each company's first name word and brand names,
+        # e.g. "nvidai" -> NVIDIA, "gogle" -> Alphabet.
         firsts = {}
         for item in catalog:
             if not item["_fund"] and item["_name"]:
                 firsts.setdefault(item["_name"].split()[0], item)
-        results = [_public(firsts[word]) for word in difflib.get_close_matches(query.split()[0], list(firsts), n=5, cutoff=0.75)]
+        by_symbol = {symbol: item for item in catalog for symbol in item["_symbols"]}
+        candidates = {**firsts, **{key: by_symbol[ticker] for key, ticker in COMPANY_ALIASES.items() if ticker in by_symbol}}
+        seen = set()
+        # First word before the whole query ("nvidai corp" -> NVIDIA); the whole query catches "jp morgn".
+        matches = difflib.get_close_matches(query.split()[0], list(candidates), n=8, cutoff=0.75)
+        if " " in query:
+            matches += difflib.get_close_matches(query, list(candidates), n=8, cutoff=0.75)
+        for word in matches:
+            item = candidates[word]
+            if item["symbol"] not in seen:
+                seen.add(item["symbol"])
+                results.append(_public(item))
+        results = results[:5]
     return results
 
 
